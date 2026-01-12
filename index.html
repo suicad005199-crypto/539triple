@@ -3,169 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 Pro Analysis</title>
+    <title>539 Analysis Dark Pro</title>
     <style>
         :root {
-            --primary: #1a237e;
-            --accent: #d32f2f;
-            --bg: #f5f7fa;
-            --card: #ffffff;
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #e0e0e0;
+            --primary: #bb86fc;
+            --accent: #cf6679;
+            --ball: #ff5252;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg);
+            color: var(--text);
             margin: 0;
-            padding: 10px;
+            padding: 15px;
             display: flex;
             justify-content: center;
         }
 
         .container {
             width: 100%;
-            max-width: 900px;
+            max-width: 800px;
             background: var(--card);
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-            padding: 20px;
-            box-sizing: border-box;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
         }
 
-        h2 {
-            text-align: center;
-            color: var(--primary);
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-        }
+        h2 { text-align: center; color: var(--primary); margin-bottom: 25px; }
 
-        /* 上傳區優化 */
+        /* 上傳區域 */
         .upload-area {
-            border: 2px dashed #cbd5e0;
-            background: #f8fafc;
-            padding: 30px 15px;
+            border: 2px dashed #333;
+            background: #252525;
+            padding: 25px;
+            border-radius: 15px;
             text-align: center;
-            border-radius: 12px;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
         }
 
-        input[type="file"] {
-            width: 100%;
-            max-width: 250px;
-            margin-bottom: 15px;
-        }
+        input[type="file"] { margin-bottom: 15px; color: #bbb; }
 
         .btn {
             background: var(--primary);
-            color: white;
+            color: #000;
             border: none;
-            padding: 12px 30px;
+            padding: 12px 35px;
             border-radius: 50px;
-            font-weight: 600;
+            font-weight: bold;
             cursor: pointer;
-            width: 100%;
-            max-width: 200px;
             transition: 0.3s;
-            -webkit-appearance: none; /* iOS 修正 */
+            -webkit-appearance: none;
         }
 
-        .btn:active { transform: scale(0.95); opacity: 0.9; }
+        .btn:active { transform: scale(0.95); }
 
-        /* 表格響應式 */
-        .table-wrapper {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+        /* 表格設計 */
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 450px; }
+        th { color: #888; padding: 15px; font-size: 0.85rem; border-bottom: 1px solid #333; }
+        td { padding: 20px 10px; border-bottom: 1px solid #2a2a2a; text-align: center; }
+
+        /* 策略文字可點擊樣式 */
+        .strategy-name {
+            color: var(--primary);
+            text-decoration: underline;
+            text-underline-offset: 4px;
+            cursor: pointer;
+            font-weight: 600;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 500px; /* 確保手機上可滾動而不擠壓 */
-        }
-
-        th {
-            background: #edf2f7;
-            color: #4a5568;
-            padding: 12px;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        td {
-            padding: 16px 8px;
-            border-bottom: 1px solid #edf2f7;
-            text-align: center;
-        }
-
-        /* 號碼球 UI */
-        .ball-group {
-            display: flex;
-            justify-content: center;
-            gap: 6px;
-        }
-
+        /* 號碼球 */
+        .ball-group { display: flex; justify-content: center; gap: 8px; }
         .ball {
-            width: 32px;
-            height: 32px;
-            line-height: 32px;
-            background: linear-gradient(135deg, #ff5252, #d32f2f);
-            color: white;
-            border-radius: 50%;
-            font-weight: bold;
-            font-size: 0.85rem;
-            box-shadow: 0 4px 6px rgba(211, 47, 47, 0.2);
+            width: 32px; height: 32px; line-height: 32px;
+            background: var(--ball); color: white;
+            border-radius: 50%; font-weight: bold; font-size: 0.9rem;
+            box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
         }
 
-        /* 期望值標籤 */
+        /* EV 標籤 */
         .ev-tag {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            background: #f1f5f9;
-            font-size: 0.8rem;
-            color: #64748b;
-            transition: 0.3s;
+            padding: 4px 12px; border-radius: 20px;
+            background: #333; color: #bbb; font-size: 0.8rem;
         }
-
-        .ev-high {
-            background: #fef3c7;
-            color: #92400e;
-            font-weight: bold;
-        }
-
-        @media (hover: hover) {
-            .ev-high:hover {
-                background: #f59e0b !important;
-                color: white;
-                transform: scale(1.1);
-            }
-        }
-
-        /* 手機版微調 */
-        @media (max-width: 600px) {
-            .container { padding: 15px; }
-            h2 { font-size: 1.25rem; }
-            .ball { width: 28px; height: 28px; line-height: 28px; font-size: 0.75rem; }
-            td { font-size: 0.85rem; }
-        }
+        .ev-high { background: #ffd600; color: #000; font-weight: bold; cursor: help; }
+        .ev-high:hover { background: #ffea00; transform: scale(1.1); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>539 數據分析系統</h2>
+    <h2>539 數據決策 (深色模式)</h2>
     
     <div class="upload-area">
         <input type="file" id="csvFile" accept=".csv"><br>
-        <button class="btn" onclick="process()">執行分析</button>
+        <button class="btn" onclick="run()">執行數據分析</button>
     </div>
 
-    <div id="resultSection" style="display:none;">
+    <div id="result" style="display:none;">
         <div class="table-wrapper">
             <table>
                 <thead>
                     <tr>
-                        <th>策略</th>
-                        <th>推薦組合</th>
+                        <th>策略類型 (點擊文字)</th>
+                        <th>組合推薦</th>
                         <th>期望值</th>
                     </tr>
                 </thead>
@@ -176,8 +121,19 @@
 </div>
 
 <script>
-function process() {
-    // 原始邏輯 B 組：10, 20, 15, 23, 35 各自 +10 並修正
+// 點選文字顯示邏輯
+function showLogic(type) {
+    const logics = {
+        'A': '【版路走勢】：分析歷史開獎分佈圖，鎖定具有斜連、跳號規律的軌跡組合。',
+        'B': '【週期+10】：以 5 期為單位。抓取首期號碼各 +10，若超過 39 則減去 39，視為該週期內的高機率號。',
+        'C': '【尾數平衡】：計算近期 0-9 尾數出現頻率，選取目前出次數較少（遺漏值高）的尾數進行補強。',
+        'D': '【冷門避險】：挑選歷史極冷門號碼。因其平分獎金機率最低，故中獎時的「期望收益」最大。'
+    };
+    alert(logics[type]);
+}
+
+function run() {
+    // B 組邏輯
     const base = [10, 20, 15, 23, 35];
     const bNums = base.map(n => {
         let r = n + 10;
@@ -186,23 +142,23 @@ function process() {
     }).sort((a,b) => a-b);
 
     const data = [
-        { name: "A. 版路走勢", nums: ["04","14","24","31","32"], ev: "中", cls: "" },
-        { name: "B. 週期+10", nums: bNums, ev: "高", cls: "" },
-        { name: "C. 尾數平衡", nums: ["07","17","27","05","15"], ev: "中", cls: "" },
-        { name: "D. 冷門避險", nums: ["01","10","20","30","39"], ev: "最高", cls: "ev-high" }
+        { id: 'A', name: "A. 版路走勢", nums: ["04","14","24","31","32"], ev: "中", cls: "" },
+        { id: 'B', name: "B. 週期+10", nums: bNums, ev: "高", cls: "" },
+        { id: 'C', name: "C. 尾數平衡", nums: ["07","17","27","05","15"], ev: "中", cls: "" },
+        { id: 'D', name: "D. 冷門避險", nums: ["01","10","20","30","39"], ev: "最高", cls: "ev-high" }
     ];
 
     let html = "";
     data.forEach(d => {
         html += `<tr>
-            <td><strong>${d.name}</strong></td>
+            <td onclick="showLogic('${d.id}')"><span class="strategy-name">${d.name}</span></td>
             <td><div class="ball-group">${d.nums.map(n => `<div class="ball">${n}</div>`).join('')}</div></td>
             <td><span class="ev-tag ${d.cls}">${d.ev}</span></td>
         </tr>`;
     });
 
     document.getElementById('tableBody').innerHTML = html;
-    document.getElementById('resultSection').style.display = 'block';
+    document.getElementById('result').style.display = 'block';
 }
 </script>
 
