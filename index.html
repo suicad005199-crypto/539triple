@@ -50,9 +50,14 @@ async function runAll() {
   const trend = stats.map(s => s.hit3Rate * 100);
   drawTrendChart(trend);
 
-  const bestRule = selectBestRule(stats);
-  const picks = generateNext3(data.slice(-5), bestRule.rule);
-  renderPicks(picks, bestRule.rule.name);
+  // 顯示每個規則的建議號碼
+  let html = document.getElementById("results").innerHTML;
+  stats.forEach(s => {
+    const picks = generateNext3(data.slice(-5), s.rule);
+    html += `<h3>規則：${s.rule.name}</h3>`;
+    picks.forEach((p,i) => { html += `組 ${i+1}: ${p.join(", ")}<br>`; });
+  });
+  document.getElementById("results").innerHTML = html;
 }
 
 // 解析 CSV
@@ -125,7 +130,7 @@ function drawTrendChart(dataPoints) {
   });
 }
 
-// 選擇最佳規則
+// 選擇最佳規則（仍保留，回測排序用）
 function selectBestRule(stats) {
   const sorted = stats.sort((a,b) => {
     if (b.hit3Rate !== a.hit3Rate) return b.hit3Rate - a.hit3Rate;
@@ -143,14 +148,6 @@ function generateNext3(latest5, rule) {
     if (validPick(pick, rule) && !exists(results, pick)) results.push(pick);
   }
   return results;
-}
-
-// 建議輸出
-function renderPicks(picks, ruleName) {
-  let html = document.getElementById("results").innerHTML;
-  html += `<h3>採用規則：${ruleName}</h3>`;
-  picks.forEach((p,i) => { html += `組 ${i+1}: ${p.join(", ")}<br>`; });
-  document.getElementById("results").innerHTML = html;
 }
 
 // 工具：命中數量
