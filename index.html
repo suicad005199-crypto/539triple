@@ -2,25 +2,25 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>539 回測＋建議號碼系統（含高勝率標記 + 選牌邏輯）</title>
+<title>539 回測＋建議號碼系統（含回測每組號碼勝率）</title>
 <style>
 body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; }
 input, button { margin-top: 10px; padding: 8px; font-size:14px; }
 #results, #history { margin-top: 20px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 0 5px rgba(0,0,0,0.1); }
-.chart-container { width: 90%; margin-top: 40px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 5px rgba(0,0,0,0.1);}
+.chart-container { width: 90%; margin-top: 40px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 5px rgba(0,0,0,0.1); }
 table { border-collapse: collapse; width: 100%; background:#fff; }
 th, td { border: 1px solid #333; padding: 5px 10px; text-align: center; }
 th { background: #3e95cd; color: #fff; }
 tr:nth-child(even) { background: #f2f2f2; }
 h2,h3,h4 { margin-bottom: 10px; }
-.pick-btn { margin-right:5px; padding:2px 6px; font-size:12px; }
+.pick-btn { margin-right:5px; padding:2px 6px; font-size:12px; cursor:pointer; }
 .high-rate { color:green; font-weight:bold; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-<h2>539 回測 + 建議號碼系統</h2>
+<h2>539 回測 + 建議號碼系統（含回測每組勝率）</h2>
 
 <label>載入歷史開獎 CSV：</label><br>
 <input type="file" id="csvFile" accept=".csv"><br>
@@ -44,36 +44,44 @@ const RULES = [
 async function runAll() {
   const fileInput = document.getElementById("csvFile");
   if (!fileInput.files[0]) { alert("請先載入 CSV 檔"); return; }
-  
+
   const text = await fileInput.files[0].text();
   const data = parseCSV(text);
 
   // 顯示最近 5 期歷史開獎號碼
   showHistory(data);
 
+  // 回測每條規則的歷史命中率
   const stats = doBacktest(data);
   renderStats(stats);
+
+  // 顯示圖表
   drawTrendChart(stats.map(s=>s.hit2Rate*100), stats.map(s=>s.hit3Rate*100));
 
-  // 生成建議號碼（3組），左側button顯示規則
+  // 生成每條規則的 3 組建議號碼，並回測每組命中率
   let html = document.getElementById("results").innerHTML;
   stats.forEach(s => {
     let picksWithRate = [];
     for(let i=0;i<3;i++){
-      let pick = generateNextPick(data.slice(-5), s.rule);
-      let rate2 = estimateHitRate(pick, data, 2);
-      let rate3 = estimateHitRate(pick, data, 3);
-      let avgRate = (rate2 + rate3)/2*100;
-      picksWithRate.push({pick, avgRate});
+      const pick = generateNextPick(data.slice(-5), s.rule);
+      // 回測該組號碼在歷史資料的命中率
+      const hit2 = estimateHitRate(pick, data, 2);
+      const hit3 = estimateHitRate(pick, data, 3);
+      const hit4 = estimateHitRate(pick, data, 4);
+      const hit5 = estimateHitRate(pick, data, 5);
+      picksWithRate.push({pick, hit2, hit3, hit4, hit5});
     }
-    picksWithRate.sort((a,b)=>b.avgRate - a.avgRate);
+    // 按平均命中率排序 (簡單平均≥2碼 + ≥3碼)
+    picksWithRate.sort((a,b)=> ((b.hit2+b.hit3)/2)-((a.hit2+a.hit3)/2));
+
     html += `<h3>規則：${s.rule.name}</h3>`;
     picksWithRate.forEach((p,i)=>{
-      // 左側 button 顯示規則說明
       html += `<button class="pick-btn" onclick="alert('${s.rule.desc}')">選牌邏輯</button>`;
-      // 動態標記高勝率號碼（≥60%）
-      let pickHtml = p.pick.map(n=>p.avgRate>=60?`<span class="high-rate">${n}</span>`:n).join(", ");
-      html += `組 ${i+1}: ${pickHtml} | 平均命中率: ${p.avgRate.toFixed(2)}%<br>`;
+      let pickHtml = p.pick.map(n=>{
+        const avgRate = (p.hit2+p.hit3)/2;
+        return avgRate>=0.6?`<span class="high-rate">${n}</span>`:n;
+      }).join(", ");
+      html += `組 ${i+1}: ${pickHtml} | 5中5: ${(p.hit5*100).toFixed(2)}%, 5中4: ${(p.hit4*100).toFixed(2)}%, 5中3: ${(p.hit3*100).toFixed(2)}%, 5中2: ${(p.hit2*100).toFixed(2)}%<br>`;
     });
   });
   document.getElementById("results").innerHTML = html;
@@ -93,32 +101,38 @@ function showHistory(data){
 // CSV解析
 function parseCSV(text){
   const lines = text.trim().split("\n");
-  lines.shift();
+  lines.shift(); // 去掉標題
   return lines.map(l=>{
     const p=l.split(",");
     return {date:p[0], nums:p.slice(2,7).map(n=>parseInt(n))};
   }).sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 
-// 回測
+// 回測每條規則
 function doBacktest(data){
   const stats = RULES.map(r=>({rule:r, hit5:0, hit4:0, hit3:0, hit2:0, total:0}));
   for(let i=5;i<data.length;i++){
     const prev=data.slice(i-5,i), actual=data[i].nums;
     stats.forEach(s=>{
-      const pick=generatePick(prev,s.rule), hit=countHit(actual,pick);
+      const pick=generatePick(prev,s.rule);
+      const hit = countHit(actual,pick);
       s.total++;
-      if(hit>=2) s.hit2++; if(hit>=3) s.hit3++; if(hit>=4) s.hit4++; if(hit==5) s.hit5++;
+      if(hit>=2) s.hit2++;
+      if(hit>=3) s.hit3++;
+      if(hit>=4) s.hit4++;
+      if(hit==5) s.hit5++;
     });
   }
   stats.forEach(s=>{
-    s.hit2Rate=s.hit2/s.total; s.hit3Rate=s.hit3/s.total;
-    s.hit4Rate=s.hit4/s.total; s.hit5Rate=s.hit5/s.total;
+    s.hit2Rate = s.hit2/s.total;
+    s.hit3Rate = s.hit3/s.total;
+    s.hit4Rate = s.hit4/s.total;
+    s.hit5Rate = s.hit5/s.total;
   });
   return stats;
 }
 
-// 顯示統計
+// 顯示回測統計
 function renderStats(stats){
   let html = "<h3>回測結果（歷史命中率）</h3>";
   html += "<table><tr><th>規則</th><th>5中5</th><th>5中4</th><th>5中3</th><th>5中2</th><th>總期數</th></tr>";
@@ -141,7 +155,8 @@ function drawTrendChart(hit2Data, hit3Data){
   const ctx = document.getElementById("trendChart").getContext("2d");
   new Chart(ctx,{
     type:'bar',
-    data:{ labels: RULES.map(r=>r.name),
+    data:{
+      labels: RULES.map(r=>r.name),
       datasets:[
         { label:'≥2 碼命中率 (%)', data: hit2Data, backgroundColor:'#8e5ea2' },
         { label:'≥3 碼命中率 (%)', data: hit3Data, backgroundColor:'#3e95cd' }
@@ -151,7 +166,7 @@ function drawTrendChart(hit2Data, hit3Data){
   });
 }
 
-// 產生號碼
+// 生成建議號碼
 function generateNextPick(latest5, rule){
   const pool = buildPool(latest5, rule);
   return shuffle(pool).slice(0,5).sort((a,b)=>a-b);
@@ -175,7 +190,7 @@ function buildPool(latest5,rule){
 }
 function generatePick(prev,rule){ const pool=buildPool(prev,rule); return shuffle(pool).slice(0,5).sort((a,b)=>a-b); }
 function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
-</script>
 
+</script>
 </body>
 </html>
