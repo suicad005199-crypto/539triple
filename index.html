@@ -2,98 +2,114 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>539 智能分析 PRO</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>539 智能分析系統 - Pro</title>
+
 <style>
-    :root { --primary: #0f172a; --accent: #0ea5e9; --gold: #f59e0b; --bg: #020617; --text: #f8fafc; }
-    body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
-    .card { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; margin-bottom: 15px; }
-    button { background: #fff; color: #000; border: none; padding: 12px; border-radius: 10px; font-weight: 700; width: 100%; cursor: pointer; }
-    .ball { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; background: #1e293b; margin: 2px; font-size: 13px; font-weight: bold; }
-    .ball.hit { background: var(--accent); color: #fff; }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; }
-    input { width: 40px; height: 40px; text-align: center; border-radius: 8px; border: 1px solid #334155; background: #000; color: var(--gold); font-weight: bold; }
+body {
+    background:#0f172a;
+    color:#f1f5f9;
+    font-family: "Microsoft JhengHei", sans-serif;
+    padding:20px;
+}
+.card {
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+    margin-bottom:20px;
+}
+.ball {
+    display:inline-block;
+    width:36px;
+    height:36px;
+    line-height:36px;
+    border-radius:50%;
+    background:#334155;
+    color:#38bdf8;
+    margin:3px;
+    font-weight:bold;
+}
+button {
+    padding:12px 20px;
+    background:#38bdf8;
+    border:none;
+    border-radius:8px;
+    font-weight:bold;
+    cursor:pointer;
+}
 </style>
 </head>
+
 <body>
 
 <div class="card">
-    <h2 style="text-align:center; color:var(--accent);">539 數據分析終端</h2>
-    <input type="file" id="csvFile" accept=".csv" style="display:none">
-    <label for="csvFile" id="fileLabel" style="display:block; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px; text-align:center; cursor:pointer; margin-bottom:15px;">📁 點擊選取 history.csv</label>
-    <button onclick="run()">啟動分析</button>
+    <h2>539 CSV 讀取測試</h2>
+    <input type="file" id="csvFile" accept=".csv">
+    <br><br>
+    <button onclick="runAll()">執行分析</button>
 </div>
 
-<div id="res" style="display:none">
-    <div class="card">
-        <h3>🔥 推薦組合</h3>
-        <div id="rec" style="text-align:center"></div>
-    </div>
-    <div class="card">
-        <h3>歷史勝率驗證</h3>
-        <div style="display:flex; justify-content:center; gap:5px; margin-bottom:10px">
-            <input type="number" id="v1"> <input type="number" id="v2"> <input type="number" id="v3"> <input type="number" id="v4"> <input type="number" id="v5">
-        </div>
-        <button onclick="check()" style="background:transparent; border:1px solid #fff; color:#fff">驗證號碼</button>
-        <div id="vRes" style="margin-top:10px; text-align:center"></div>
-    </div>
-    <div class="card">
-        <h3>近期歷史</h3>
-        <div id="hist"></div>
-    </div>
+<div id="history" class="card">
+    <h3>近期開獎紀錄</h3>
 </div>
 
 <script>
-let DATA = [];
+let HIST_DATA = [];
 
-// 核心修正：適配標題為 [開獎日期,獎號1,獎號2,獎號3,獎號4,獎號5] 的格式
-function parse(text) {
-    const lines = text.trim().split(/\r?\n/).filter(l => l.length > 5);
+/* === 主流程 === */
+async function runAll(){
+    const fileInput = document.getElementById("csvFile");
+    if(!fileInput.files.length){
+        alert("請先選取 CSV");
+        return;
+    }
+
+    const text = await fileInput.files[0].text();
+    HIST_DATA = parseCSV(text);
+
+    if(HIST_DATA.length === 0){
+        alert("CSV 解析失敗，請確認格式");
+        return;
+    }
+
+    showHistory(HIST_DATA);
+}
+
+/* === CSV 解析（已修正） === */
+function parseCSV(text){
+    const lines = text.trim().split(/\r?\n/);
     lines.shift(); // 移除標題列
-    return lines.map(l => {
-        const p = l.split(',');
-        // 抓取日期(索引0)與五個獎號(索引1~5)
-        const nums = p.slice(1, 6).map(n => parseInt(n.trim())).filter(n => !isNaN(n)).sort((a,b)=>a-b);
-        return nums.length === 5 ? { date: p[0], nums } : null;
-    }).filter(x => x);
+
+    return lines.map(line => {
+        const p = line.split(",");
+        if(p.length !== 6) return null;
+
+        return {
+            date: p[0].trim(),
+            nums: p.slice(1,6)
+                    .map(n => parseInt(n.trim(),10))
+                    .sort((a,b)=>a-b)
+        };
+    }).filter(Boolean)
+      .sort((a,b)=> new Date(a.date) - new Date(b.date));
 }
 
-async function run() {
-    const file = document.getElementById('csvFile').files[0];
-    if(!file) return;
-    DATA = parse(await file.text());
-    if(!DATA.length) return alert("解析失敗，請確認格式");
-    
-    document.getElementById('res').style.display = 'block';
-    
-    // 渲染歷史
-    let h = "<table>";
-    DATA.slice(-5).reverse().forEach(d => {
-        h += `<tr><td style="font-size:12px;opacity:0.6">${d.date}</td><td>${d.nums.map(n=>`<span class="ball">${n}</span>`).join('')}</td></tr>`;
+/* === 顯示歷史 === */
+function showHistory(data){
+    let html = "<table>";
+    data.slice(-5).reverse().forEach(d=>{
+        html += `
+        <tr>
+            <td style="opacity:.6">${d.date}</td>
+            <td>
+                ${d.nums.map(n=>`<span class="ball">${String(n).padStart(2,"0")}</span>`).join("")}
+            </td>
+        </tr>`;
     });
-    document.getElementById('hist').innerHTML = h + "</table>";
-
-    // 推薦 (熱門號)
-    const f = {};
-    DATA.slice(-50).forEach(d => d.nums.forEach(n => f[n] = (f[n]||0)+1));
-    const pick = Object.keys(f).sort((a,b)=>f[b]-f[a]).slice(0,5).map(Number).sort((a,b)=>a-b);
-    document.getElementById('rec').innerHTML = pick.map(n=>`<span class="ball hit">${n}</span>`).join('');
+    html += "</table>";
+    document.getElementById("history").innerHTML += html;
 }
-
-function check() {
-    const u = [1,2,3,4,5].map(i=>parseInt(document.getElementById('v'+i).value)).filter(n=>n);
-    let s = {2:0, 3:0, 4:0};
-    DATA.forEach(d => {
-        let m = d.nums.filter(n=>u.includes(n)).length;
-        if(m >= 2) s[m >= 4 ? 4 : m]++;
-    });
-    document.getElementById('vRes').innerHTML = `歷史表現：2星(${s[2]}次) | 3星(${s[3]}次) | 4星+(${s[4]}次)`;
-}
-
-document.getElementById('csvFile').addEventListener('change', e => {
-    document.getElementById('fileLabel').innerText = "已選取: " + e.target.files[0].name;
-});
 </script>
+
 </body>
 </html>
