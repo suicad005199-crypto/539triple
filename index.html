@@ -2,176 +2,225 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 版路分析專業版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>539 Advanced Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #0b0f1a; --card: #161b2d; --accent: #00d2ff; --selected: #ffcc00; --grid-border: #2d3548; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: var(--bg); color: #e2e8f0; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; }
-        .app { width: 100%; max-width: 600px; padding: 12px; }
+        :root { --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8; --hot: #f43f5e; --cold: #22d3ee; --gold: #f59e0b; }
+        body { margin: 0; background: var(--bg); color: #f8fafc; font-family: system-ui, sans-serif; padding: 10px; }
+        .dashboard { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.5fr; gap: 15px; }
+        .glass { background: var(--panel); border-radius: 16px; padding: 15px; border: 1px solid #334155; }
+        .full-width { grid-column: 1 / -1; }
         
-        .section { background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--grid-border); }
-        h3 { margin: 0 0 8px 0; font-size: 13px; color: var(--accent); letter-spacing: 1px; }
+        /* 號碼球盤 - 熱度漸層 */
+        .ball-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+        .ball { 
+            aspect-ratio: 1; border-radius: 10px; display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; cursor: pointer; transition: 0.2s; position: relative; font-size: 14px;
+        }
+        .ball.active { outline: 3px solid var(--gold); outline-offset: 2px; z-index: 2; }
+        .ball small { font-size: 8px; opacity: 0.7; }
 
-        /* 走勢圖看板 */
-        .trend-container { overflow-x: auto; display: block; white-space: nowrap; background: #000; border-radius: 8px; padding: 5px; }
-        .trend-grid { display: inline-grid; grid-template-columns: repeat(30, 18px); gap: 2px; text-align: center; }
-        .trend-cell { width: 18px; height: 18px; font-size: 9px; line-height: 18px; border-radius: 2px; color: #fff; }
-        .is-odd { background: #ff4757; } .is-even { background: #2f3542; }
-        .is-big { background: #ffa502; } .is-small { background: #3742fa; }
-        .trend-label { font-size: 10px; color: #94a3b8; margin-top: 4px; display: flex; gap: 10px; }
+        /* 統計標籤 */
+        .stat-badge { background: #0f172a; padding: 4px 8px; border-radius: 6px; font-size: 12px; border: 1px solid #334155; }
 
-        /* 選號球視覺 */
-        .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
-        .ball { aspect-ratio: 1; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.1); }
-        .ball span { font-size: 15px; font-weight: 800; }
-        .ball small { font-size: 9px; font-weight: normal; margin-top: 2px; }
-        .ball.active { background: var(--selected) !important; color: #000 !important; transform: scale(1.05); box-shadow: 0 0 15px var(--selected); }
+        /* 策略控制 */
+        .strategy-box { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+        .row { display: flex; justify-content: space-between; align-items: center; }
+        select, input { background: #0f172a; color: white; border: 1px solid #334155; padding: 4px; border-radius: 4px; }
 
-        /* 狀態顯示 */
-        .res-bar { background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px; border-radius: 15px; text-align: center; font-size: 26px; color: var(--selected); font-family: 'Courier New', monospace; margin-bottom: 15px; border: 1px solid var(--selected); }
-        .btn-upload { display: block; padding: 8px; border: 1px dashed var(--accent); border-radius: 8px; text-align: center; color: var(--accent); cursor: pointer; font-size: 12px; margin-bottom: 10px; }
-        button { width: 100%; padding: 14px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; background: var(--accent); color: #000; }
+        .btn-gen { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        #export { margin-top: 10px; background: #000; padding: 10px; border-radius: 8px; font-family: monospace; color: #10b981; white-space: pre-wrap; display: none; }
+
+        @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
-<div class="app">
-    <label class="btn-upload" for="csv">點擊上傳歷史數據 CSV</label>
-    <input type="file" id="csv" style="display:none" onchange="handleFile(this)">
-
-    <div class="section">
-        <h3>歷史 30 期走勢圖 (左新右舊)</h3>
-        <div class="trend-container">
-            <div class="trend-grid" id="trend_oe"></div>
-            <div class="trend-grid" id="trend_bs" style="margin-top:4px"></div>
+<div class="dashboard">
+    <div class="glass full-width">
+        <div class="row">
+            <h3 style="margin:0">539 數據視覺化走勢</h3>
+            <input type="file" id="csv-file" accept=".csv" onchange="handleFile(this)">
         </div>
-        <div class="trend-label">
-            <span>🔴奇/⚫偶</span> | <span>🟠大/🔵小</span>
-        </div>
+        <canvas id="mainChart" height="100"></canvas>
     </div>
 
-    <div class="res-bar" id="res_num">00 00 00 00 00</div>
-
-    <div class="section">
-        <h3>號碼熱度分佈 (深紅越熱 / 藍黑越冷)</h3>
-        <div class="grid" id="grid"></div>
+    <div class="glass">
+        <div class="row" style="margin-bottom:10px;">
+            <span>號碼球盤 (開獎/遺漏)</span>
+            <div id="sel-stat" class="stat-badge">選 0 個 | 均值: 0</div>
+        </div>
+        <div id="grid" class="ball-grid"></div>
     </div>
 
-    <button onclick="smartPick()">智慧隨機選牌</button>
+    <div class="glass strategy-box">
+        <h3>智慧選號策略</h3>
+        <div class="row">
+            <span>奇偶比 (奇:偶)</span>
+            <select id="p-oe"><option value="any">隨機</option><option value="2:3">2:3</option><option value="3:2">3:2</option></select>
+        </div>
+        <div class="row">
+            <span>大小比 (≥20)</span>
+            <select id="p-bs"><option value="any">隨機</option><option value="2:3">2:3</option><option value="3:2">3:2</option></select>
+        </div>
+        <div class="row">
+            <span>和值區間限制</span>
+            <div>
+                <input type="number" id="p-sum-min" value="70" style="width:45px"> - 
+                <input type="number" id="p-sum-max" value="130" style="width:45px">
+            </div>
+        </div>
+        <div class="row">
+            <span>號碼偏好</span>
+            <select id="p-pref"><option value="mix">冷熱交替</option><option value="hot">追熱門號</option><option value="cold">埋伏冷號</option></select>
+        </div>
+        <div class="row">
+            <span>連號限制</span>
+            <select id="p-con"><option value="any">不限</option><option value="no">避開連號</option><option value="yes">必須連號</option></select>
+        </div>
+        <div class="row">
+            <span>生成組數</span>
+            <input type="number" id="p-count" value="1" min="1" max="5" style="width:45px">
+        </div>
+        <button class="btn-gen" onclick="generateSmart()">執行策略選號</button>
+        <div id="export"></div>
+    </div>
 </div>
 
 <script>
+    let raw = [];
     let freqMap = {};
-    let lastSeen = {};
-    let historyStats = [];
+    let gapMap = {};
     let selected = new Set();
+    let chart;
 
     function handleFile(input) {
         const reader = new FileReader();
-        reader.onload = (e) => parse(e.target.result);
+        reader.onload = (e) => {
+            const lines = e.target.result.split('\n').filter(l => l.trim() !== "").slice(1);
+            parse(lines);
+        };
         reader.readAsText(input.files[0]);
     }
 
-    function parse(text) {
-        const lines = text.split(/\n/).filter(l => l.trim() !== "").slice(1);
-        freqMap = {}; historyStats = [];
-        for(let i=1; i<=39; i++) lastSeen[i] = lines.length;
-
-        lines.forEach((line, idx) => {
-            const cols = line.split(',');
-            const nums = cols.slice(1,6).map(Number).filter(n => n >= 1 && n <= 39);
+    function parse(lines) {
+        raw = []; freqMap = {};
+        for(let i=1; i<=39; i++) gapMap[i] = lines.length;
+        
+        lines.forEach((l, idx) => {
+            const c = l.split(',');
+            const nums = c.slice(1,6).map(Number).filter(n => n > 0);
             if(nums.length === 5) {
-                // 走勢數據
-                const oddCount = nums.filter(n => n % 2 !== 0).length;
-                const bigCount = nums.filter(n => n >= 20).length;
-                historyStats.push({ odd: oddCount, big: bigCount });
-                
+                raw.push({ date: c[0], nums, sum: nums.reduce((a,b)=>a+b, 0) });
                 nums.forEach(n => {
                     freqMap[n] = (freqMap[n] || 0) + 1;
-                    if(lastSeen[n] > idx) lastSeen[n] = idx;
+                    if(gapMap[n] > idx) gapMap[n] = idx;
                 });
             }
         });
-        renderAll();
+        updateChart();
+        renderGrid();
     }
 
-    function renderAll() {
-        // 1. 走勢圖
-        const oeDiv = document.getElementById('trend_oe');
-        const bsDiv = document.getElementById('trend_bs');
-        oeDiv.innerHTML = bsDiv.innerHTML = '';
-        
-        historyStats.slice(0, 30).forEach(s => {
-            const c1 = document.createElement('div');
-            c1.className = `trend-cell ${s.odd >= 3 ? 'is-odd' : 'is-even'}`;
-            c1.innerText = s.odd;
-            oeDiv.appendChild(c1);
-
-            const c2 = document.createElement('div');
-            c2.className = `trend-cell ${s.big >= 3 ? 'is-big' : 'is-small'}`;
-            c2.innerText = s.big;
-            bsDiv.appendChild(c2);
+    function updateChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if(chart) chart.destroy();
+        const latest = raw.slice(0, 20).reverse();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: latest.map(r => r.date.slice(5)),
+                datasets: [{
+                    label: '和值趨勢',
+                    data: latest.map(r => r.sum),
+                    borderColor: '#38bdf8',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)'
+                }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#334155' } } } }
         });
+    }
 
-        // 2. 號碼球 (漸層顏色)
+    function renderGrid() {
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
         const maxFreq = Math.max(...Object.values(freqMap), 1);
-
+        
         for(let i=1; i<=39; i++) {
-            const count = freqMap[i] || 0;
-            const ratio = count / maxFreq;
-            // 計算熱度顏色: 0% -> 藍黑, 100% -> 深紅
-            const r = Math.floor(20 + ratio * 200);
-            const g = Math.floor(30 + ratio * 50);
-            const b = Math.floor(60 - ratio * 40);
-
-            const ball = document.createElement('div');
-            ball.className = `ball ${selected.has(i) ? 'active' : ''}`;
-            ball.style.background = `rgb(${r},${g},${b})`;
-            ball.innerHTML = `<span>${i.toString().padStart(2,'0')}</span><small>${lastSeen[i]}期</small>`;
-            ball.onclick = () => {
+            const f = freqMap[i] || 0;
+            const gap = gapMap[i] || 0;
+            const b = document.createElement('div');
+            b.className = `ball ${selected.has(i) ? 'active' : ''}`;
+            
+            // 色溫計算 (HSL: 200為冷藍, 0為熱紅)
+            const hue = 200 - (f / maxFreq * 200);
+            b.style.background = `hsl(${hue}, 70%, 40%)`;
+            
+            b.innerHTML = `<span>${i.toString().padStart(2,'0')}</span><small>${gap}期</small>`;
+            b.onclick = () => {
                 if(selected.has(i)) selected.delete(i);
                 else if(selected.size < 5) selected.add(i);
-                renderAll();
-                updateRes();
+                updateSelectStat();
+                renderGrid();
             };
-            grid.appendChild(ball);
-        }
-    }
-
-    function updateRes() {
-        const arr = Array.from(selected).sort((a,b)=>a-b);
-        document.getElementById('res_num').innerText = arr.length ? arr.map(n=>n.toString().padStart(2,'0')).join(' ') : '00 00 00 00 00';
-    }
-
-    function smartPick() {
-        selected.clear();
-        let pool = [];
-        for(let i=1; i<=39; i++) {
-            let weight = 1 + (freqMap[i] || 0) * 2;
-            if(lastSeen[i] > 10) weight += 5; // 補償冷號機率
-            for(let w=0; w<weight; w++) pool.push(i);
-        }
-        while(selected.size < 5) selected.add(pool[Math.floor(Math.random() * pool.length)]);
-        renderAll();
-        updateRes();
-    }
-
-    function renderEmpty() {
-        // 初始化空球
-        const grid = document.getElementById('grid');
-        grid.innerHTML = '';
-        for(let i=1; i<=39; i++){
-            const b = document.createElement('div');
-            b.className = 'ball';
-            b.style.background = '#2d3548';
-            b.innerHTML = `<span>${i.toString().padStart(2,'0')}</span><small>-</small>`;
             grid.appendChild(b);
         }
     }
-    renderEmpty();
+
+    function updateSelectStat() {
+        const arr = Array.from(selected);
+        const avg = arr.length ? (arr.reduce((a,b)=>a+b)/arr.length).toFixed(1) : 0;
+        document.getElementById('sel-stat').innerText = `選 ${arr.length} 個 | 均值: ${avg}`;
+    }
+
+    function generateSmart() {
+        const count = parseInt(document.getElementById('p-count').value);
+        const results = [];
+        const pool = [];
+        const pref = document.getElementById('p-pref').value;
+
+        // 構建加權池
+        for(let i=1; i<=39; i++) {
+            let weight = 1;
+            if(pref === 'hot') weight += (freqMap[i] || 0);
+            if(pref === 'cold') weight += Math.floor((gapMap[i] || 0)/2);
+            if(pref === 'mix') weight += (freqMap[i] || 0) + Math.floor((gapMap[i] || 0)/3);
+            for(let w=0; w<weight; w++) pool.push(i);
+        }
+
+        let safety = 0;
+        while(results.length < count && safety < 2000) {
+            safety++;
+            let temp = new Set();
+            while(temp.size < 5) temp.add(pool[Math.floor(Math.random() * pool.length)]);
+            let arr = Array.from(temp).sort((a,b)=>a-b);
+            
+            // 策略檢查
+            const sum = arr.reduce((a,b)=>a+b);
+            const odd = arr.filter(n=>n%2!==0).length;
+            const big = arr.filter(n=>n>=20).length;
+            const hasCon = arr.some((n,i)=> n === arr[i-1]+1);
+
+            const checkOE = document.getElementById('p-oe').value === 'any' || document.getElementById('p-oe').value === `${odd}:${5-odd}`;
+            const checkBS = document.getElementById('p-bs').value === 'any' || document.getElementById('p-bs').value === `${big}:${5-big}`;
+            const checkSum = sum >= document.getElementById('p-sum-min').value && sum <= document.getElementById('p-sum-max').value;
+            const checkCon = document.getElementById('p-con').value === 'any' || (document.getElementById('p-con').value === 'yes' ? hasCon : !hasCon);
+
+            if(checkOE && checkBS && checkSum && checkCon) {
+                results.push(arr.map(n=>n.toString().padStart(2,'0')).join(' '));
+            }
+        }
+
+        const exp = document.getElementById('export');
+        exp.style.display = 'block';
+        exp.innerText = results.length ? `[策略選號結果]\n` + results.join('\n') : "找不到符合條件的組合，請放寬限制";
+    }
+
+    // 初始化空球盤
+    renderGrid();
 </script>
 </body>
 </html>
