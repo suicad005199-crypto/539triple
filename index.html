@@ -2,155 +2,109 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 聰明分析助手</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>539 數據分析專業版</title>
     <style>
-        :root {
-            --ios-blue: #007AFF;
-            --ios-bg: #F2F2F7;
-            --ios-card: #FFFFFF;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--ios-bg);
-            margin: 0;
-            padding: 20px;
-            color: #1C1C1E;
-        }
-        .container { max-width: 500px; margin: 0 auto; }
-        h1 { font-size: 24px; font-weight: 700; margin-bottom: 20px; }
+        :root { --ios-bg: #F2F2F7; --ios-blue: #007AFF; }
+        body { font-family: -apple-system; background: var(--ios-bg); margin: 0; padding: 15px; }
+        .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h2 { font-size: 16px; color: #8E8E93; margin-top: 0; margin-bottom: 12px; }
         
-        /* 檔案上傳區 */
-        .upload-section {
-            background: var(--ios-card);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        input[type="file"] { display: none; }
-        .custom-file-upload {
-            display: inline-block;
-            padding: 12px 24px;
-            background: var(--ios-blue);
-            color: white;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        /* 統計卡片 */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .card {
-            background: var(--ios-card);
-            padding: 15px;
-            border-radius: 12px;
-            text-align: center;
-        }
-        .card-label { font-size: 12px; color: #8E8E93; margin-bottom: 5px; }
-        .card-value { font-size: 20px; font-weight: 700; color: #FF3B30; }
-
-        /* 推薦號碼區 */
-        .result-section {
-            background: var(--ios-card);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-        }
-        .ball-container {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 15px;
-        }
-        .ball {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(145deg, #ff5e5e, #d62c2c);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
+        /* 歷史紀錄表格樣式 */
+        .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .history-table th { text-align: left; color: #8E8E93; font-weight: 400; padding: 8px; border-bottom: 1px solid #E5E5EA; }
+        .history-table td { padding: 10px 8px; border-bottom: 1px solid #F2F2F7; }
+        .tag { display: inline-block; background: #E5E5EA; padding: 2px 6px; border-radius: 4px; margin-right: 4px; font-family: monospace; }
+        
+        .ball { width: 38px; height: 38px; background: #FF3B30; color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin: 4px; font-weight: bold; }
+        .btn { background: var(--ios-blue); color: white; border: none; padding: 12px; border-radius: 10px; width: 100%; font-size: 16px; font-weight: 600; }
+        .scroll-area { max-height: 250px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>539 數據分析</h1>
-
-    <div class="upload-section">
-        <label for="file-upload" class="custom-file-upload">
-            選擇上傳 history_last30.csv
-        </label>
-        <input id="file-upload" type="file" accept=".csv" onchange="handleFile(this)"/>
-        <p id="file-name" style="font-size: 12px; color: #8E8E93; margin-top: 10px;">尚未偵測到檔案</p>
+    <div class="card">
+        <h2>1. 檔案上傳</h2>
+        <input type="file" id="csvFile" accept=".csv" style="margin-bottom:12px;">
+        <button class="btn" onclick="runAnalysis()">開始讀取並分析</button>
     </div>
 
-    <div class="stats-grid">
-        <div class="card">
-            <div class="card-label">最強尾數</div>
-            <div id="top-tail" class="card-value">--</div>
-        </div>
-        <div class="card">
-            <div class="card-label">建議奇偶比</div>
-            <div id="odd-even" class="card-value">3:2</div>
-        </div>
+    <div id="analysisResult" class="card" style="display:none;">
+        <h2>2. 數據分析結果</h2>
+        <p>真實最強尾數：<span id="statTail" style="color:#FF3B30; font-weight:bold;">--</span></p>
+        <div id="recBalls"></div>
     </div>
 
-    <div class="result-section">
-        <div style="font-weight: 600; color: #8E8E93;">建議本期組合 (高機率 2 星)</div>
-        <div class="ball-container" id="recommendation">
-            <div class="ball">?</div>
-            <div class="ball">?</div>
-            <div class="ball">?</div>
-            <div class="ball">?</div>
-            <div class="ball">?</div>
+    <div class="card">
+        <h2>3. 歷史開獎紀錄 (CSV 預覽)</h2>
+        <div class="scroll-area">
+            <table class="history-table" id="historyTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">期別</th>
+                        <th>開獎號碼</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="2" style="text-align:center; color:#C7C7CC;">等待檔案上傳...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
-</div>
 
 <script>
-    function handleFile(input) {
-        const file = input.files[0];
-        if (file) {
-            document.getElementById('file-name').innerText = "已讀取: " + file.name;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const text = e.target.result;
-                processCSV(text);
-            };
-            reader.readAsText(file);
-        }
-    }
+function runAnalysis() {
+    const file = document.getElementById('csvFile').files[0];
+    if (!file) return;
 
-    function processCSV(csv) {
-        // 這裡會執行精簡的分析邏輯
-        // 1. 抓取所有數字
-        // 2. 統計尾數頻率
-        // 3. 過濾掉近期冷門號
-        // 以下為模擬分析後的結果更新
-        document.getElementById('top-tail').innerText = "2尾, 8尾";
-        const mockNumbers = [02, 12, 18, 28, 35];
-        const container = document.getElementById('recommendation');
-        container.innerHTML = '';
-        mockNumbers.forEach(num => {
-            const div = document.createElement('div');
-            div.className = 'ball';
-            div.innerText = num.toString().padStart(2, '0');
-            container.appendChild(div);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const rows = e.target.result.split(/\r?\n/).filter(r => r.trim());
+        const tableBody = document.querySelector('#historyTable tbody');
+        tableBody.innerHTML = '';
+        
+        let freq = {};
+        let tails = Array(10).fill(0);
+
+        rows.forEach((row, index) => {
+            const nums = row.split(',').map(n => n.trim());
+            
+            // 填充歷史表格 (iOS 風格)
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${rows.length - index}</td><td>${nums.map(n => `<span class="tag">${n.padStart(2,'0')}</span>`).join('')}</td>`;
+            tableBody.appendChild(tr);
+
+            // 統計邏輯
+            nums.forEach(val => {
+                let n = parseInt(val);
+                if (!isNaN(n)) {
+                    freq[n] = (freq[n] || 0) + 1;
+                    tails[n % 10]++;
+                }
+            });
         });
-    }
-</script>
 
+        // 更新分析區
+        const maxTail = tails.indexOf(Math.max(...tails));
+        document.getElementById('statTail').innerText = maxTail + " 尾";
+        
+        const sortedNums = Object.entries(freq).sort((a,b) => b[1] - a[1]);
+        const container = document.getElementById('recBalls');
+        container.innerHTML = '';
+        
+        // 推薦邏輯：取最強尾數中的熱號 + 全域前二熱號
+        let finalSelection = new Set();
+        [maxTail, maxTail+10, maxTail+20, maxTail+30].filter(n => n > 0 && n <= 39).forEach(n => finalSelection.add(n));
+        sortedNums.slice(0, 2).forEach(x => finalSelection.add(parseInt(x[0])));
+
+        Array.from(finalSelection).slice(0, 5).forEach(n => {
+            container.innerHTML += `<div class="ball">${n.toString().padStart(2,'0')}</div>`;
+        });
+        
+        document.getElementById('analysisResult').style.display = 'block';
+    };
+    reader.readAsText(file);
+}
+</script>
 </body>
 </html>
