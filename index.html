@@ -3,31 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>539 QUANT PRO｜動態資料自適應版</title>
+<title>539 QUANT PRO｜模組化 + 圖表版</title>
 <style>
 :root{
     --bg:#0f172a;--card:#1e293b;--accent:#38bdf8;
     --gold:#fbbf24;--text:#f1f5f9;--muted:#94a3b8;
 }
 *{box-sizing:border-box;}
-body{
-    margin:0;padding:20px;background:radial-gradient(circle at 50% 0%,#1e293b,#0f172a);
-    font-family:'PingFang TC',sans-serif;color:var(--text);
-}
+body{margin:0;padding:20px;background:radial-gradient(circle at 50% 0%,#1e293b,#0f172a);font-family:'PingFang TC',sans-serif;color:var(--text);}
 .container{max-width:1200px;margin:auto;}
-.card{
-    background:rgba(30,41,59,.75);border-radius:16px;padding:16px;margin-bottom:20px;border:1px solid rgba(255,255,255,.08);
-}
-button{
-    padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0284c7);color:#fff;font-weight:700;border:none;cursor:pointer;font-size:1rem;margin-top:5px;width:100%;
-}
-.ball{
-    display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;margin:2px;text-align:center;
-    background:radial-gradient(circle at 30% 30%,#475569,#1e293b);color:var(--gold);font-weight:800;font-size:.85rem;
-}
-.strategy{
-    border-left:4px solid var(--accent);background:rgba(255,255,255,.03);border-radius:12px;padding:12px;margin-top:10px;
-}
+.card{background:rgba(30,41,59,.75);border-radius:16px;padding:16px;margin-bottom:20px;border:1px solid rgba(255,255,255,.08);}
+button{padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0284c7);color:#fff;font-weight:700;border:none;cursor:pointer;font-size:1rem;margin-top:5px;width:100%;}
+.ball{display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;margin:2px;text-align:center;background:radial-gradient(circle at 30% 30%,#475569,#1e293b);color:var(--gold);font-weight:800;font-size:.85rem;}
+.strategy{border-left:4px solid var(--accent);background:rgba(255,255,255,.03);border-radius:12px;padding:12px;margin-top:10px;}
 .badge{display:inline-block;padding:2px 6px;border-radius:6px;font-size:.75rem;font-weight:700;margin-right:5px;}
 .b2{background:#155e75;color:#cffafe;}
 .b3{background:#166534;color:#dcfce7;}
@@ -41,18 +29,11 @@ th{color:var(--accent);}
 .period-select{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;}
 .period-select button{flex:1;min-width:60px;}
 .warning{color:#facc15;font-weight:700;margin-top:5px;font-size:.85rem;}
-@media(max-width:768px){
-    .ball{width:24px;height:24px;line-height:24px;font-size:.75rem;}
-    button{font-size:.95rem;padding:10px;}
-    .strategy{padding:10px;margin-top:8px;}
-    table{font-size:.7rem;}
-}
-@media(max-width:480px){
-    .ball{width:22px;height:22px;line-height:22px;font-size:.7rem;}
-    button{font-size:.9rem;padding:8px;}
-    table{font-size:.65rem;}
-}
+.chart-container{height:250px;margin-top:10px;}
+@media(max-width:768px){.ball{width:24px;height:24px;line-height:24px;font-size:.75rem;}button{font-size:.95rem;padding:10px;}.strategy{padding:10px;margin-top:8px;}table{font-size:.7rem;}}
+@media(max-width:480px){.ball{width:22px;height:22px;line-height:22px;font-size:.7rem;}button{font-size:.9rem;padding:8px;}table{font-size:.65rem;}}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <div class="container">
@@ -66,7 +47,7 @@ th{color:var(--accent);}
 </div>
 
 <div id="recommend" class="card"><h3>推薦牌組（含命中機率）</h3></div>
-<div id="summary" class="card"><h3>回測總覽</h3></div>
+<div id="summary" class="card"><h3>回測總覽</h3><canvas id="trendChart" class="chart-container"></canvas></div>
 <div id="detail" class="card"><h3>單期詳細命中紀錄</h3></div>
 
 <!-- Modal -->
@@ -80,6 +61,7 @@ th{color:var(--accent);}
             <button onclick="updateHotNumbers(30)">近 30 期</button>
         </div>
         <p id="hotInfo" style="opacity:0.7;font-size:0.85rem"></p>
+        <div class="chart-container"><canvas id="hotChart"></canvas></div>
         <div class="table-wrap">
             <table id="hotTable"><tr><th>號碼</th><th>出現次數</th></tr></table>
         </div>
@@ -89,62 +71,45 @@ th{color:var(--accent);}
 </div>
 
 <script>
+// ===== CSV 處理模組 =====
 let HIST=[];
-let sets=[];
-let stats=[];
-let currentHot=30;
-
-async function runAll(){
-    const f=document.getElementById('csvFile').files[0];
-    if(!f) return alert('請選 CSV');
-    HIST=parseCSV(await f.text());
-
-    if(HIST.length<10) return alert('至少需要 10 期資料');
-    const warningDiv = document.getElementById('warningMsg');
-    if(HIST.length<40){
-        warningDiv.innerText='資料量少於 40 期，統計結果可能不穩定';
-    } else {
-        warningDiv.innerText='';
-    }
-
-    const base=HIST.slice(0,-1);
-    sets=generateSets(base);
-    stats=calcSetStats(sets);
-    renderRecommend(sets,stats);
-    renderBacktest();
-    updateHotNumbers(currentHot);
+function parseCSV(text){
+    const lines = text.trim().split(/\r?\n/); lines.shift();
+    return lines.map(l=>{
+        const p=l.split(',');
+        return {date:p[0], nums:p.slice(1,6).map(n=>+n)};
+    }).reverse(); // 舊→新
 }
 
-function parseCSV(t){
-    const l=t.trim().split(/\r?\n/); l.shift(); // 移除標題
-    return l.map(x=>{
-        const p=x.split(',');
-        return {date: p[0], nums: p.slice(1,6).map(n=>+n)};
-    }).reverse(); // <- 反轉成舊→新
-}
-
+// ===== 統計 / 回測模組 =====
+let cache = {freq:{}, sets:[], stats:[]};
 function generateSets(data){
-    const W=30,E=2;
+    if(cache.sets.length) return cache.sets;
+    const W = Math.min(30,data.length), E=2;
     const recent=data.slice(-W);
     const excl=data.slice(-E).flatMap(d=>d.nums);
-    const freq={},gap={};
+    const freq={}, gap={};
     recent.forEach((d,i)=>{d.nums.forEach(n=>{freq[n]=(freq[n]||0)+1;gap[n]=W-i;});});
     const pool=[...Array(39)].map((_,i)=>i+1).filter(n=>!excl.includes(n));
     const hot=pool.sort((a,b)=>(freq[b]||0)-(freq[a]||0)).slice(0,10);
-    const warm=pool.filter(n=>gap[n]>=5&&gap[n]<=15);
+    const warm=pool.filter(n=>gap[n]>=5 && gap[n]<=15);
     const cold=pool.sort((a,b)=>(gap[b]||0)-(gap[a]||0)).slice(0,10);
     const pick=(a,k)=>a.sort(()=>Math.random()-0.5).slice(0,k);
-    return [
+    const sets=[
         [...pick(hot,2),...pick(warm,2),...pick(cold,1)],
         [...pick(hot,2),...pick(warm,1),...pick(cold,2)],
         [...pick(hot,1),...pick(warm,3),...pick(cold,1)]
     ].map(s=>[...new Set(s)].sort((a,b)=>a-b));
+    cache.freq=freq;
+    cache.sets=sets;
+    return sets;
 }
 
 function calcSetStats(sets){
-    let res=sets.map(()=>({hit2:0,hit3:0,total:0}));
-    const startIndex = Math.min(40,HIST.length);
-    for(let i=startIndex;i<HIST.length;i++){
+    if(cache.stats.length) return cache.stats;
+    const res=sets.map(()=>({hit2:0,hit3:0,total:0}));
+    const availablePeriods = Math.max(HIST.length, 10);
+    for(let i=0;i<availablePeriods;i++){
         const draw=HIST[i].nums;
         sets.forEach((s,idx)=>{
             const h=s.filter(n=>draw.includes(n)).length;
@@ -153,7 +118,25 @@ function calcSetStats(sets){
             res[idx].total++;
         });
     }
+    cache.stats=res;
     return res;
+}
+
+// ===== UI / 渲染模組 =====
+function runAll(){
+    const f=document.getElementById('csvFile').files[0];
+    if(!f) return alert('請選 CSV');
+    f.text().then(txt=>{
+        HIST=parseCSV(txt);
+        if(HIST.length<10) return alert('至少需要 10 期資料');
+        document.getElementById('warningMsg').innerText = HIST.length<40?'資料量少於 40 期，統計結果可能不穩定':'';
+        const sets=generateSets(HIST);
+        const stats=calcSetStats(sets);
+        sets.sort((a,b)=>stats[sets.indexOf(b)].hit3 - stats[sets.indexOf(a)].hit3);
+        renderRecommend(sets,stats);
+        renderBacktest();
+        updateHotNumbers(30);
+    });
 }
 
 function renderRecommend(sets,stats){
@@ -169,35 +152,48 @@ function renderRecommend(sets,stats){
     `;
 }
 
+let trendChart;
 function renderBacktest(){
-    let h2=0,h3=0,t=0,rows='';
-    const startIndex = Math.min(40,HIST.length);
-    for(let i=startIndex;i<HIST.length;i++){
-        const past=HIST.slice(0,i);
-        const draw=HIST[i];
-        const s=generateSets(past);
+    const h2=[], h3=[], labels=[];
+    const availablePeriods = HIST.length;
+    for(let i=0;i<availablePeriods;i++){
+        const draw=HIST[i].nums;
+        const sets=generateSets(HIST);
         let max=0;
-        s.forEach(x=>{const hit=x.filter(n=>draw.nums.includes(n)).length;if(hit>max) max=hit;});
-        if(max>=2) h2++; if(max>=3) h3++; t++;
-        rows+=`<tr><td>${draw.date}</td><td>${max}</td></tr>`;
+        sets.forEach(s=>{const hit=s.filter(n=>draw.includes(n)).length;if(hit>max) max=hit;});
+        labels.push(HIST[i].date);
+        h2.push(max>=2?1:0); h3.push(max>=3?1:0);
     }
-    document.getElementById('summary').innerHTML=`
-        回測期數 ${t}<br>
-        ≥2 星 ${(t? (h2/t*100).toFixed(1):0)}%<br>
-        ≥3 星 ${(t? (h3/t*100).toFixed(1):0)}%
-    `;
+    const ctx=document.getElementById('trendChart').getContext('2d');
+    if(trendChart) trendChart.destroy();
+    trendChart=new Chart(ctx,{
+        type:'line',
+        data:{labels, datasets:[
+            {label:'≥2★',data:h2, borderColor:'#38bdf8',fill:false},
+            {label:'≥3★',data:h3, borderColor:'#fbbf24',fill:false}
+        ]},
+        options:{responsive:true, plugins:{legend:{position:'top'}}}
+    });
+
+    // 單期詳細
+    let rows='';
+    for(let i=0;i<availablePeriods;i++){
+        const draw=HIST[i].nums;
+        const sets=generateSets(HIST);
+        let max=0; sets.forEach(s=>{const hit=s.filter(n=>draw.includes(n)).length;if(hit>max) max=hit;});
+        rows+=`<tr><td>${HIST[i].date}</td><td>${max}</td></tr>`;
+    }
     document.getElementById('detail').innerHTML=`
         <div class="table-wrap">
         <table><tr><th>日期</th><th>最高命中</th></tr>${rows}</table></div>
     `;
 }
 
-// Modal
+// ===== 熱門號碼 Modal + 柱狀圖 =====
+let hotChart;
 function showModal(){document.getElementById('hotModal').style.display='flex';}
 function hideModal(){document.getElementById('hotModal').style.display='none';}
-
 function updateHotNumbers(period){
-    currentHot=period;
     const len=Math.min(period,HIST.length);
     const data=HIST.slice(-len);
     const freq={};
@@ -207,6 +203,12 @@ function updateHotNumbers(period){
     let html='<tr><th>號碼</th><th>出現次數</th></tr>';
     sorted.forEach(([num,count])=>{html+=`<tr><td>${num}</td><td>${count}</td></tr>`;});
     document.getElementById('hotTable').innerHTML=html;
+
+    const ctx=document.getElementById('hotChart').getContext('2d');
+    if(hotChart) hotChart.destroy();
+    hotChart=new Chart(ctx,{type:'bar',data:{
+        labels:sorted.map(([n])=>n), datasets:[{label:'出現次數',data:sorted.map(([n,c])=>c),backgroundColor:'#38bdf8'}]
+    },options:{responsive:true,plugins:{legend:{display:false}}}});
 }
 
 document.getElementById('csvFile').addEventListener('change',e=>{fileLabel.innerText=e.target.files[0].name;});
