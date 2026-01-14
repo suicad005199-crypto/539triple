@@ -2,27 +2,30 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>539 回測系統｜熱號釋放版</title>
+<title>539 回測系統｜逐期牌組驗證</title>
 <style>
 body { font-family: Arial, sans-serif; padding: 20px; }
 button { padding: 8px 16px; margin: 10px 0; }
 .result { margin-top: 20px; line-height: 1.8; }
 .highlight { font-size: 18px; font-weight: bold; }
-table { border-collapse: collapse; margin-top: 15px; }
-th, td { border: 1px solid #999; padding: 6px 10px; }
+table { border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid #999; padding: 4px 6px; text-align: center; }
 th { background: #eee; }
+.hit { color: red; font-weight: bold; }
+.period { margin-top: 30px; }
+.maxhit { font-weight: bold; margin-top: 5px; }
 </style>
 </head>
 <body>
 
-<h2>539 模擬系統（熱號釋放點版）</h2>
+<h2>539 回測系統（逐期牌組＋命中標色）</h2>
 
 <input type="file" id="csvFile" accept=".csv">
 <br>
 <button onclick="runBacktest()">執行回測</button>
 
 <div id="output" class="result"></div>
-<div id="hitTable"></div>
+<div id="detail"></div>
 
 <script>
 function parseCSV(text) {
@@ -43,14 +46,15 @@ function runBacktest() {
     let total = 0, played = 0;
     let hit2 = 0, hit3 = 0, hit4 = 0;
     let hitPeriods = 0;
-    const hitRecords = [];
+
+    let detailHTML = "";
 
     for (let i = 30; i < draws.length; i++) {
       total++;
       const history = draws.slice(0, i);
       const actual = draws[i];
 
-      // ===== Gap（極冷 ≥20）=====
+      // ===== Gap ≥20 =====
       const gap = {};
       for (let n = 1; n <= 39; n++) gap[n] = 0;
       history.forEach(d => {
@@ -60,7 +64,7 @@ function runBacktest() {
       const cold = Object.keys(gap).filter(n => gap[n] >= 20).map(Number);
       if (cold.length === 0) continue;
 
-      // ===== 熱號（近5期 ≥3次）=====
+      // ===== 熱號 近5期 ≥3 =====
       const freq = {};
       history.slice(-5).forEach(d =>
         d.nums.forEach(n => freq[n] = (freq[n] || 0) + 1)
@@ -68,18 +72,15 @@ function runBacktest() {
       const hot = Object.keys(freq).filter(n => freq[n] >= 3).map(Number);
       if (hot.length === 0) continue;
 
-      // ===== 熱號釋放點 =====
+      // ===== 熱號釋放 =====
       const last3 = history.slice(-3).flatMap(d => d.nums);
       const last1 = history[history.length - 1].nums;
-      const releaseHot = hot.filter(
-        n => last3.includes(n) && !last1.includes(n)
-      );
+      const releaseHot = hot.filter(n => last3.includes(n) && !last1.includes(n));
       if (releaseHot.length === 0) continue;
 
-      // === 出手 ===
       played++;
 
-      // ===== 產生預測組 =====
+      // ===== 產生牌組 =====
       const preds = [];
       for (let a = 0; a < releaseHot.length && preds.length < 12; a++)
         for (let b = 0; b < hot.length && preds.length < 12; b++)
@@ -96,46 +97,51 @@ function runBacktest() {
             }
 
       let maxHit = 0;
+      let rows = "";
+
       preds.forEach(p => {
-        const h = p.filter(n => actual.nums.includes(n)).length;
-        if (h > maxHit) maxHit = h;
+        let hitCount = 0;
+        const cells = p.map(n => {
+          if (actual.nums.includes(n)) {
+            hitCount++;
+            return `<span class="hit">${n}</span>`;
+          }
+          return n;
+        });
+        if (hitCount > maxHit) maxHit = hitCount;
+        rows += `<tr><td>${cells.join("</td><td>")}</td><td>${hitCount}</td></tr>`;
       });
 
-      if (maxHit >= 2) {
-        hit2++;
-        hitPeriods++;
-        hitRecords.push({
-          date: actual.date,
-          nums: actual.nums.join(", "),
-          hit: maxHit
-        });
-      }
+      if (maxHit >= 2) hitPeriods++;
+      if (maxHit >= 2) hit2++;
       if (maxHit >= 3) hit3++;
       if (maxHit >= 4) hit4++;
+
+      detailHTML += `
+        <div class="period">
+          <div><b>${actual.date}</b></div>
+          <div>開獎號碼：${actual.nums.join(", ")}</div>
+          <table>
+            <tr><th colspan="5">牌組</th><th>中</th></tr>
+            ${rows}
+          </table>
+          <div class="maxhit">本期最高命中：${maxHit}</div>
+        </div>
+      `;
     }
 
     document.getElementById("output").innerHTML = `
       <b>可回測期數：</b>${total}<br>
       <b>出手期數：</b>${played}<br>
-      <span class="highlight">出手比例：${(played / total * 100).toFixed(1)}%</span>
-      <hr>
+      <span class="highlight">出手比例：${(played / total * 100).toFixed(1)}%</span><hr>
       <b>命中期數（≥2）：</b>${hitPeriods}<br>
       出手期 ≥2：${played ? (hit2 / played * 100).toFixed(1) : 0}%<br>
       出手期 ≥3：${played ? (hit3 / played * 100).toFixed(1) : 0}%<br>
-      <span class="highlight">出手期 ≥4：${played ? (hit4 / played * 100).toFixed(1) : 0}%</span>
+      出手期 ≥4：${played ? (hit4 / played * 100).toFixed(1) : 0}%
     `;
 
-    let html = `<h3>命中期明細（≥2）</h3>
-      <table>
-      <tr><th>日期</th><th>開獎號碼</th><th>最高命中</th></tr>`;
-    hitRecords.forEach(r => {
-      html += `<tr><td>${r.date}</td><td>${r.nums}</td><td>中 ${r.hit}</td></tr>`;
-    });
-    html += "</table>";
-
-    document.getElementById("hitTable").innerHTML = html;
+    document.getElementById("detail").innerHTML = detailHTML;
   };
-
   reader.readAsText(file);
 }
 </script>
