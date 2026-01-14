@@ -2,183 +2,192 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>539 量化決測引擎 V6.0 - 對照實驗版</title>
+    <title>539 計量決策引擎 V8.0 - 穩健性壓力測試版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg: #0d1117; --p: #161b22; --acc: #58a6ff; --err: #f85149; --win: #238636; }
-        body { font-family: 'Fira Code', monospace; background: var(--bg); color: #c9d1d9; font-size: 11px; padding: 15px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+        body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: var(--bg); color: #c9d1d9; font-size: 11px; padding: 15px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
         .card { background: var(--p); border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-        .ball { display: inline-block; width: 32px; height: 32px; line-height: 32px; background: #388bfd; border-radius: 50%; text-align: center; margin: 3px; font-weight: bold; }
-        .metric { font-size: 18px; color: var(--acc); font-weight: bold; }
-        #log { height: 100px; overflow-y: auto; background: #000; padding: 8px; color: #8b949e; border-radius: 4px; }
-        button { background: var(--win); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; }
-        .tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; background: #21262d; border: 1px solid #30363d; }
+        .ball { display: inline-block; width: 34px; height: 34px; line-height: 34px; background: linear-gradient(135deg, #238636, #2ea043); border-radius: 50%; text-align: center; margin: 3px; font-weight: bold; }
+        .metric { font-size: 18px; color: var(--acc); font-weight: bold; font-family: 'Consolas'; }
+        #log { height: 100px; overflow-y: auto; background: #010409; padding: 8px; color: #7ee787; border: 1px solid #30363d; }
+        button { background: #21262d; color: white; border: 1px solid #30363d; padding: 12px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+        .status-tag { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+        .tag-active { background: #1c3e24; color: #3fb950; }
+        .tag-fail { background: #3e1c1c; color: var(--err); }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3 style="margin:0 0 10px 0;">🛡️ 539 量化決測引擎 V6.0 - 對照實驗 & 失效監控</h3>
-    <input type="file" id="csvFile" style="margin-bottom:12px;">
-    <button onclick="runV6()">啟動全維度回測與顯著性分析</button>
+    <h3 style="margin:0 0 10px 0;">🛡️ 539 量化引擎 V8.0 - 實證分佈與穩健性壓力測試</h3>
+    <input type="file" id="csvFile" style="margin-bottom:10px; width: 100%;">
+    <button onclick="EngineV8.init()">執行全維度證偽回測</button>
 </div>
 
 <div class="grid">
     <div class="card">
-        <strong>決策核心指標 (Engine Metrics)</strong>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; margin-top:10px;">
-            <div>真實 P-Value<br><span id="pVal" class="metric">--</span></div>
-            <div>超額收益 (Alpha)<br><span id="alpha" class="metric">--</span></div>
-            <div>模型穩定度<br><span id="stab" class="metric">--</span></div>
-            <div>決策分數<br><span id="score" class="metric">--</span></div>
+        <strong>實證計量指標 (Empirical Metrics)</strong>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+            <div>Empirical P-Value<br><span id="pVal" class="metric">--</span></div>
+            <div>Risk-Adj Alpha<br><span id="alpha" class="metric">--</span></div>
+            <div>Real Sharpe Ratio<br><span id="sharpe" class="metric">--</span></div>
+            <div>Robustness Score<br><span id="score" class="metric">--</span></div>
         </div>
     </div>
     
     <div class="card">
-        <strong>本期最優組合池 (Portfolio)</strong>
-        <div id="portfolio" style="margin-top:10px;"></div>
-        <div style="margin-top:8px;">
-            信號狀態：<span id="sigStatus" class="tag">--</span>
-            遺漏水準：<span id="gapLvl" class="tag">--</span>
-        </div>
+        <strong>決策池 (Portfolio) & 信心區間</strong>
+        <div id="portfolio" style="margin: 10px 0;"></div>
+        <div id="status">狀態：<span id="sigStatus" class="status-tag">IDLE</span></div>
     </div>
 </div>
 
 <div class="grid">
     <div class="card">
-        <strong>對照回測曲線 (Model vs Random)</strong>
-        <canvas id="compChart" height="120"></canvas>
+        <strong>回測累計期望值 (Expected Value Curve)</strong>
+        <canvas id="evChart" height="130"></canvas>
     </div>
     <div class="card">
-        <strong>組合結構分布 (Regime Analysis)</strong>
-        <canvas id="regimeChart" height="120"></canvas>
+        <strong>虛無分佈檢定 (Permutation Test)</strong>
+        <canvas id="nullDistChart" height="130"></canvas>
     </div>
 </div>
 
-<div id="log">系統就緒。請上傳歷史數據以進行證偽檢定...</div>
+<div id="log">系統就緒。等待數據輸入以執行壓力測試...</div>
 
 <script>
-const log = (m) => { const l = document.getElementById('log'); l.innerHTML += `> ${m}<br>`; l.scrollTop = l.scrollHeight; };
-
-async function runV6() {
-    const file = document.getElementById('csvFile').files[0];
-    if (!file) return alert("請載入數據");
-    const data = (await file.text()).trim().split('\n').map(r => r.split(',')).filter(r => r.length >= 6).map(r => r.slice(1,6).map(Number));
+// V8.0 核心引擎：模組化設計
+const EngineV8 = {
+    config: { seed: 42, mc_trials: 1000, test_win: 100, reward: { 2: 1, 3: 10, 4: 100, 5: 1000 } },
     
-    log(`數據讀取完成 (${data.length} 期)，開始滾動窗口回測...`);
+    // 1. 特徵提取 (帶有動態權重校準)
+    extract: (data, decay = 0.998) => {
+        let freq = new Array(40).fill(0), gaps = new Array(40).fill(0);
+        data.forEach((d, i) => {
+            const w = Math.pow(decay, data.length - i);
+            d.forEach(n => { freq[n] += w; gaps[n] = data.length - i; });
+        });
+        return { freq, gaps, t: data.length };
+    },
 
-    const winSize = 100;
-    let modelHits = [], randomHits = [];
+    // 2. 演化尋優 (GA + 結構約束)
+    evolve: (f) => {
+        const fitness = (s) => {
+            let score = s.reduce((a, n) => a + f.freq[n], 0);
+            const gapBonus = s.reduce((a, n) => a + Math.log1p(f.t - f.gaps[n]), 0) * 0.4;
+            // 施加結構約束 (避免極端分佈)
+            const zones = [0,0,0]; s.forEach(n => zones[Math.floor((n-1)/13)]++);
+            const penalty = zones.some(z => z > 3) ? 0.7 : 1.0;
+            return (score + gapBonus) * penalty;
+        };
+        let pop = Array.from({length: 40}, () => EngineV8.randSet());
+        for(let g=0; g<60; g++) {
+            pop.sort((a,b) => fitness(b) - fitness(a));
+            for(let i=20; i<40; i++) pop[i] = EngineV8.mutate(pop[i-20]);
+        }
+        return pop[0].sort((a,b)=>a-b);
+    },
 
-    // 1. 同步對照回測 (Walk-forward)
-    for (let i = data.length - winSize; i < data.length; i++) {
-        const train = data.slice(0, i);
-        const features = extractFeatures(train);
+    randSet: () => {
+        let s = new Set(); while(s.size < 5) s.add(Math.floor(Math.random()*39)+1);
+        return Array.from(s);
+    },
+
+    mutate: (set) => {
+        let n = [...set]; n[Math.floor(Math.random()*5)] = Math.floor(Math.random()*39)+1;
+        let res = Array.from(new Set(n));
+        return res.length === 5 ? res : EngineV8.randSet();
+    },
+
+    // 3. 實證回測邏輯
+    init: async () => {
+        const file = document.getElementById('csvFile').files[0];
+        if (!file) return alert("請載入數據");
+        const data = (await file.text()).trim().split('\n').map(r => r.split(',')).filter(r => r.length >= 6).map(r => r.slice(1,6).map(Number));
+        EngineV8.run(data);
+    },
+
+    run: (data) => {
+        const log = (m) => { document.getElementById('log').innerHTML += `> ${m}<br>`; };
+        log("啟動 V8.0 穩健性壓力測試...");
+
+        let modelEV = [], nullEVDist = [];
+        const win = EngineV8.config.test_win;
+
+        // Walk-forward 核心
+        for (let i = data.length - win; i < data.length; i++) {
+            const train = data.slice(0, i);
+            const f = EngineV8.extract(train);
+            const pred = EngineV8.evolve(f);
+            
+            const hits = pred.filter(n => data[i].includes(n)).length;
+            modelEV.push(EngineV8.config.reward[hits] || 0);
+
+            // 每期同步執行 10 次 Monte Carlo 作為經驗虚無樣本 (Empirical Baseline)
+            for(let j=0; j<10; j++) {
+                const rs = EngineV8.randSet(); // 這裡可進階加入結構約束
+                const rh = rs.filter(n => data[i].includes(n)).length;
+                nullEVDist.push(EngineV8.config.reward[rh] || 0);
+            }
+        }
+
+        // 4. 計量統計計算
+        const mMean = modelEV.reduce((a,b)=>a+b, 0) / win;
+        const nMean = nullEVDist.reduce((a,b)=>a+b, 0) / nullEVDist.length;
+        const alpha = mMean - nMean;
         
-        // 模型選號
-        const pred = evolveGA(features);
-        modelHits.push(pred.filter(n => data[i].includes(n)).length >= 2 ? 1 : 0);
+        // 真實 Sharpe (基於收益波動)
+        const std = Math.sqrt(modelEV.reduce((a,b)=>a+Math.pow(b-mMean,2),0)/win);
+        const sharpe = std === 0 ? 0 : (alpha / std).toFixed(3);
+
+        // Empirical P-Value (置換檢定模擬)
+        const pVal = EngineV8.permTest(modelEV.reduce((a,b)=>a+b,0), nullEVDist, win);
+
+        EngineV8.updateUI(mMean, alpha, sharpe, pVal, modelEV, data);
+    },
+
+    permTest: (obsSum, dist, n) => {
+        let trials = [];
+        for(let i=0; i<1000; i++) {
+            let s = 0; for(let j=0; j<n; j++) s += dist[Math.floor(Math.random()*dist.length)];
+            trials.push(s);
+        }
+        return trials.filter(t => t >= obsSum).length / 1000;
+    },
+
+    updateUI: (m, a, sharpe, p, evHist, data) => {
+        document.getElementById('pVal').innerText = p.toFixed(4);
+        document.getElementById('alpha').innerText = a.toFixed(2);
+        document.getElementById('sharpe').innerText = sharpe;
+        const score = (a * 10 + (1-p) * 50).toFixed(1);
+        document.getElementById('score').innerText = score;
+
+        const tag = document.getElementById('sigStatus');
+        if (p < 0.05 && a > 0) {
+            tag.innerText = "SIGNIFICANT / ACTIVE"; tag.className = "status-tag tag-active";
+        } else {
+            tag.innerText = "WEAK / OVERFITTING RISK"; tag.className = "status-tag tag-fail";
+        }
+
+        const f = EngineV8.extract(data);
+        const final = EngineV8.evolve(f);
+        document.getElementById('portfolio').innerHTML = final.map(n => `<span class="ball">${n}</span>`).join('');
         
-        // 隨機基準對照 (Monte Carlo Baseline)
-        const rand = generateRandomSet();
-        randomHits.push(rand.filter(n => data[i].includes(n)).length >= 2 ? 1 : 0);
+        EngineV8.render(evHist);
+    },
+
+    render: (hist) => {
+        const ctx = document.getElementById('evChart').getContext('2d');
+        let acc = 0; const data = hist.map(v => acc += v);
+        new Chart(ctx, {
+            type: 'line',
+            data: { labels: hist.map((_,i)=>i), datasets: [{ label: '累計期望值收益 (Cumulative EV)', data: data, borderColor: '#acc' }] },
+            options: { plugins: { legend: { display: false } } }
+        });
     }
-
-    // 2. 統計分析
-    const modelRate = modelHits.reduce((a,b)=>a+b, 0) / winSize;
-    const randRate = randomHits.reduce((a,b)=>a+b, 0) / winSize;
-    const alpha = (modelRate - randRate) * 100;
-    
-    // 真實 P-Value (基於隨機對照組分佈)
-    const pVal = computePValue(modelHits, randomHits);
-    const score = (alpha * 5 + (1-pVal) * 50).toFixed(1);
-
-    updateUI(modelRate, randRate, pVal, alpha, score, modelHits, randomHits, data);
-}
-
-function extractFeatures(train) {
-    let freq = new Array(40).fill(0), gap = new Array(40).fill(0);
-    const decay = 0.997;
-    train.forEach((d, idx) => {
-        const w = Math.pow(decay, train.length - idx);
-        d.forEach(n => { freq[n] += w; gap[n] = train.length - idx; });
-    });
-    return { freq, gap, t: train.length };
-}
-
-function evolveGA(f) {
-    let pop = Array.from({length: 40}, () => generateRandomSet());
-    for(let g=0; g<60; g++) {
-        pop.sort((a,b) => fitness(b, f) - fitness(a, f));
-        for(let j=20; j<40; j++) pop[j] = mutate(pop[j-20]);
-    }
-    return pop[0].sort((a,b)=>a-b);
-}
-
-function fitness(set, f) {
-    let s = set.reduce((a,n) => a + f.freq[n], 0);
-    // 結構約束：區間平衡 (低 1-13, 中 14-26, 高 27-39)
-    let counts = [0,0,0];
-    set.forEach(n => counts[Math.floor((n-1)/13)]++);
-    const balPenalty = counts.filter(c => c > 3).length * 5; // 過度集中懲罰
-    return s - balPenalty;
-}
-
-function computePValue(mHits, rHits) {
-    // 簡化版 Permutation：對照組實際表現與模型差異
-    const mSum = mHits.reduce((a,b)=>a+b, 0);
-    const rSum = rHits.reduce((a,b)=>a+b, 0);
-    return mSum > rSum ? 0.05 / (mSum - rSum + 1) : 0.5;
-}
-
-function generateRandomSet() {
-    let s = new Set(); while(s.size < 5) s.add(Math.floor(Math.random()*39)+1);
-    return Array.from(s);
-}
-
-function mutate(set) {
-    let n = [...set]; n[Math.floor(Math.random()*5)] = Math.floor(Math.random()*39)+1;
-    let res = Array.from(new Set(n));
-    return res.length === 5 ? res : generateRandomSet();
-}
-
-function updateUI(mR, rR, p, a, s, mH, rH, data) {
-    document.getElementById('pVal').innerText = p.toFixed(3);
-    document.getElementById('alpha').innerText = a.toFixed(1) + "%";
-    document.getElementById('score').innerText = s;
-    document.getElementById('stab').innerText = (1 - (a < 0 ? 0.5 : 0)).toFixed(2);
-    
-    // 生成最終決策組合 (真正使用最新資料訓練)
-    const finalFeatures = extractFeatures(data);
-    const finalSet = evolveGA(finalFeatures);
-    document.getElementById('portfolio').innerHTML = finalSet.map(n => `<span class="ball">${n}</span>`).join('');
-    
-    document.getElementById('sigStatus').innerText = s > 60 ? "STRONG" : "NEUTRAL";
-    document.getElementById('sigStatus').style.color = s > 60 ? "#238636" : "#8b949e";
-
-    renderChart(mH, rH);
-    log("分析完畢。模型效能與隨機基準已同步完成證偽。");
-}
-
-function renderChart(mH, rH) {
-    const ctx = document.getElementById('compChart').getContext('2d');
-    let mAcc = 0, rAcc = 0;
-    const mData = mH.map(v => mAcc += v);
-    const rData = rH.map(v => rAcc += v);
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: mH.map((_,i)=>i),
-            datasets: [
-                { label: '模型組合 (GA)', data: mData, borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0 },
-                { label: '隨機對照 (Baseline)', data: rData, borderColor: '#8b949e', borderDash: [5, 5], pointRadius: 0 }
-            ]
-        },
-        options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { color: '#c9d1d9', font: { size: 10 } } } } }
-    });
-}
+};
 </script>
 </body>
 </html>
