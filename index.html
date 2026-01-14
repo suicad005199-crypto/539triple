@@ -2,82 +2,126 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>539 版路模擬驗證系統</title>
+<title>539 版路滾動回測系統</title>
 <style>
 body { font-family: Arial; padding: 20px; }
-textarea { width: 100%; height: 160px; }
-button { padding: 8px 16px; margin-top: 10px; }
+button { padding: 8px 16px; margin: 10px 0; }
 .result { margin-top: 20px; line-height: 1.8; }
-.code { background: #f5f5f5; padding: 10px; }
+table { border-collapse: collapse; margin-top: 10px; }
+td, th { border: 1px solid #ccc; padding: 6px 10px; }
 </style>
 </head>
 <body>
 
-<h2>539 下期預測版路模擬系統</h2>
+<h2>539 多特徵版路滾動回測系統</h2>
 
-<p>貼上 CSV 歷史資料：</p>
-<textarea id="csvInput">
-開獎日期,獎號1,獎號2,獎號3,獎號4,獎號5
-2025/01/01,2,7,8,10,14
-2025/01/02,12,26,30,32,33
-2025/01/03,5,6,8,11,14
-</textarea>
-
+<input type="file" id="csvFile" accept=".csv">
 <br>
-<button onclick="runSimulation()">執行模擬驗證</button>
+<button onclick="runBacktest()">執行滾動回測</button>
 
 <div class="result" id="output"></div>
 
 <script>
-function runSimulation() {
-    const csv = document.getElementById("csvInput").value.trim();
-    const rows = csv.split("\n").slice(1).map(r => r.split(","));
+function parseCSV(text) {
+    return text.trim().split("\n").slice(1).map(r =>
+        r.split(",").slice(1).map(Number)
+    );
+}
 
-    if (rows.length < 3) {
-        alert("資料至少需要 3 期以上");
-        return;
-    }
+function oddEvenOK(nums) {
+    const odd = nums.filter(n => n % 2 === 1).length;
+    return odd === 2 || odd === 3;
+}
 
-    // 取最後一期做驗證
-    const actual = rows[rows.length - 1].slice(1).map(Number);
+function sumOK(nums, min, max) {
+    const s = nums.reduce((a,b)=>a+b,0);
+    return s >= min && s <= max;
+}
 
-    // 訓練資料（不含最後一期）
-    const training = rows.slice(0, rows.length - 1);
+function tailOK(nums) {
+    const tails = nums.map(n => n % 10);
+    return new Set(tails).size >= 3;
+}
 
-    // === 版路示範：近 N 期熱號 ===
-    const N = 10;
-    const freq = {};
+function runBacktest() {
+    const file = document.getElementById("csvFile").files[0];
+    if (!file) return alert("請上傳 CSV");
 
-    training.slice(-N).forEach(row => {
-        row.slice(1).forEach(num => {
-            freq[num] = (freq[num] || 0) + 1;
-        });
-    });
+    const reader = new FileReader();
+    reader.onload = () => {
+        const draws = parseCSV(reader.result);
+        const stats = { hit2:0, hit3:0, hit4:0, hit5:0, totalHit:0 };
 
-    // 排除上一期已開過的號碼
-    const lastDraw = training[training.length - 1].slice(1).map(Number);
+        let tests = 0;
 
-    const candidates = Object.entries(freq)
-        .filter(([n]) => !lastDraw.includes(Number(n)))
-        .sort((a, b) => b[1] - a[1])
-        .map(e => Number(e[0]));
+        for (let i = 20; i < draws.length; i++) {
+            const history = draws.slice(0, i);
+            const actual = draws[i];
 
-    const prediction = candidates.slice(0, 5);
+            // === Gap & 冷號計算 ===
+            const gap = {};
+            for (let n = 1; n <= 39; n++) gap[n] = 0;
 
-    // 命中計算
-    const hit = prediction.filter(n => actual.includes(n));
+            history.forEach(draw => {
+                for (let n = 1; n <= 39; n++) gap[n]++;
+                draw.forEach(n => gap[n] = 0);
+            });
 
-    document.getElementById("output").innerHTML = `
-        <b>驗證期實際開獎：</b> ${actual.join(", ")}<br>
-        <b>預測號碼：</b> ${prediction.join(", ")}<br>
-        <b>命中號碼：</b> ${hit.join(", ") || "無"}<br>
-        <b>命中顆數：</b> ${hit.length} / 5
-        <hr>
-        <b>使用版路：</b>
-        <div class="code">
-        近 ${N} 期熱號 + 排除上一期號碼
-        </div>
-    `;
+            const scored = Object.entries(gap)
+                .map(([n,g]) => ({
+                    n: Number(n),
+                    score: g >= 8 ? g * 1.5 : g
+                }))
+                .sort((a,b)=>b.score-a.score)
+                .map(e=>e.n);
+
+            // === 嘗試組合 ===
+            let prediction = [];
+            for (let i = 0; i < scored.length; i++) {
+                for (let j = i+1; j < scored.length; j++) {
+                    for (let k = j+1; k < scored.length; k++) {
+                        for (let l = k+1; l < scored.length; l++) {
+                            for (let m = l+1; m < scored.length; m++) {
+                                const combo = [
+                                    scored[i],scored[j],scored[k],
+                                    scored[l],scored[m]
+                                ];
+                                if (!oddEvenOK(combo)) continue;
+                                if (!sumOK(combo, 70, 120)) continue;
+                                if (!tailOK(combo)) continue;
+                                prediction = combo;
+                                i=j=k=l=m=100; // break all
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (prediction.length !== 5) continue;
+
+            const hit = prediction.filter(n => actual.includes(n)).length;
+            stats.totalHit += hit;
+            if (hit >= 2) stats.hit2++;
+            if (hit >= 3) stats.hit3++;
+            if (hit >= 4) stats.hit4++;
+            if (hit === 5) stats.hit5++;
+
+            tests++;
+        }
+
+        document.getElementById("output").innerHTML = `
+        <b>回測期數：</b> ${tests}<br>
+        <b>平均命中顆數：</b> ${(stats.totalHit / tests).toFixed(2)}<br>
+        <table>
+        <tr><th>命中條件</th><th>次數</th><th>機率</th></tr>
+        <tr><td>≥ 2 顆</td><td>${stats.hit2}</td><td>${(stats.hit2/tests*100).toFixed(1)}%</td></tr>
+        <tr><td>≥ 3 顆</td><td>${stats.hit3}</td><td>${(stats.hit3/tests*100).toFixed(1)}%</td></tr>
+        <tr><td>≥ 4 顆</td><td>${stats.hit4}</td><td>${(stats.hit4/tests*100).toFixed(1)}%</td></tr>
+        <tr><td>5 顆全中</td><td>${stats.hit5}</td><td>${(stats.hit5/tests*100).toFixed(2)}%</td></tr>
+        </table>
+        `;
+    };
+    reader.readAsText(file);
 }
 </script>
 
