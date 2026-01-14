@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>539策略回測 Demo v18</title>
+<title>539策略回測 Demo v19</title>
 <style>
 html, body { margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#0B2545; color:#F0F0F0; }
 .container { display:flex; flex-direction:column; align-items:center; padding:10px; min-height:100vh; box-sizing:border-box; }
@@ -26,7 +26,7 @@ td { background:#142850; }
 </head>
 <body>
 <div class="container">
-<h1>539策略回測 Demo v18</h1>
+<h1>539策略回測 Demo v19</h1>
 
 <div class="card">
 <h2>上傳歷史 CSV</h2>
@@ -36,9 +36,9 @@ td { background:#142850; }
 
 <div class="card">
 <h2>策略模組</h2>
-<p>L1：高頻 + 最近熱門 + 冷號 + 區間微調（強化）</p>
-<p>L2_new2：近期熱門加權 + 冷號補充 + 高頻 + 區間調整（替換原 L2）</p>
-<p>L3：區間選號 + 最近熱門 + 高頻 + 冷號微調（強化）</p>
+<p>L1：高頻號碼優先 + 最近熱門號碼 + 冷號 + 區間微調（固定生成）</p>
+<p>L2_new2：近期熱門加權 + 冷號補充 + 高頻號碼 + 區間調整（固定生成）</p>
+<p>L3：區間選號 + 最近熱門號碼 + 高頻號碼 + 冷號微調（固定生成）</p>
 </div>
 
 <div class="card">
@@ -112,12 +112,7 @@ function computeFrequency(data){
   return freq;
 }
 
-// 回測策略生成（可隨機微調）
-function randomAdjust(nums){
-  return nums.map(n=>Math.max(1,Math.min(39,n + (Math.random()<0.5?-1:1)))).slice(0,5);
-}
-
-// 策略函數（固定生成函數無隨機）
+// 策略固定生成函數
 function generateFixedL1(freq){
   let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
   let high=sorted.slice(0,10).map(x=>x.n);
@@ -146,10 +141,10 @@ function generateFixedL3(freq){
   return nums.slice(0,5);
 }
 
-// 回測策略生成（可微隨機）
-function generatePredictionL1(freq){ return randomAdjust(generateFixedL1(freq)); }
-function generatePredictionL2_new2(freq){ return randomAdjust(generateFixedL2(freq)); }
-function generatePredictionL3(freq){ return randomAdjust(generateFixedL3(freq)); }
+// 回測固定生成
+function generatePredictionL1(freq){ return generateFixedL1(freq); }
+function generatePredictionL2_new2(freq){ return generateFixedL2(freq); }
+function generatePredictionL3(freq){ return generateFixedL3(freq); }
 
 // 計算命中數
 function hitCount(actual,pred){ return pred.filter(n=>actual.includes(n.toString())).length; }
