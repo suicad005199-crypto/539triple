@@ -2,137 +2,118 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>539 策略回測與預測</title>
+<title>539 多策略回測系統</title>
 <style>
 body { font-family: Arial; padding: 20px; }
 table { border-collapse: collapse; margin-top: 10px; }
 td, th { border: 1px solid #ccc; padding: 4px 6px; text-align: center; }
-.hit2 { background: #d0f0d0; }
-.hit3 { background: #90e090; font-weight: bold; }
-.warn { color: red; font-weight: bold; }
+.best { background:#ffd966; font-weight:bold; }
 </style>
 </head>
 <body>
 
-<h2>539 回測 / 策略模擬系統</h2>
+<h2>539 多策略回測 / 勝率比較</h2>
 <input type="file" id="csvFile" accept=".csv">
 <button onclick="run()">執行回測</button>
 
-<div id="summary"></div>
-<div id="warn"></div>
-<div id="next"></div>
-<div id="log"></div>
+<div id="result"></div>
 
 <script>
-function parseCSV(text) {
-  return text.trim().split('\n').slice(1).map(l => {
-    const p = l.split(',');
-    return { date: p[0], nums: p.slice(1).map(Number) };
+function parseCSV(text){
+  return text.trim().split('\n').slice(1).map(l=>{
+    const p=l.split(',');
+    return {date:p[0],nums:p.slice(1).map(Number)};
   });
 }
 
-function run() {
-  const f = document.getElementById('csvFile').files[0];
-  if (!f) return alert('請上傳 CSV');
-
-  const r = new FileReader();
-  r.onload = e => simulate(parseCSV(e.target.result));
+function run(){
+  const f=document.getElementById('csvFile').files[0];
+  if(!f)return alert('請上傳 CSV');
+  const r=new FileReader();
+  r.onload=e=>simulate(parseCSV(e.target.result));
   r.readAsText(f);
 }
 
-function simulate(data) {
-  let hit2 = 0, hit3 = 0, hit4 = 0;
-  let no3 = 0;
-  let rows = '';
+function simulate(data){
+  const strategies={
+    A:{name:'穩定盤',hit2:0,hit3:0,hit4:0},
+    B:{name:'轉折盤',hit2:0,hit3:0,hit4:0},
+    C:{name:'尾部盤',hit2:0,hit3:0,hit4:0}
+  };
 
-  for (let i = 10; i < data.length; i++) {
-    const hist = data.slice(i - 10, i);
-    const target = data[i].nums;
+  const total=data.length-20;
 
-    const freq = {};
-    hist.forEach(d => d.nums.forEach(n => freq[n] = (freq[n] || 0) + 1));
+  for(let i=20;i<data.length;i++){
+    const hist=data.slice(i-20,i);
+    const target=data[i].nums;
 
-    const hot = Object.keys(freq).filter(n => freq[n] >= 2).map(Number);
-    const lastSeen = {};
-    data.slice(0, i).forEach((d, idx) => d.nums.forEach(n => lastSeen[n] = idx));
-    const gap = Object.keys(lastSeen).filter(n => i - lastSeen[n] >= 10).map(Number);
+    const freq={}, lastSeen={};
+    hist.forEach((d,idx)=>d.nums.forEach(n=>{
+      freq[n]=(freq[n]||0)+1;
+      lastSeen[n]=idx;
+    }));
 
-    const pool = [...new Set([...hot, ...gap])].filter(n => n >= 1 && n <= 39);
+    const hot=Object.keys(freq).filter(n=>freq[n]>=2).map(Number);
+    const cold=Object.keys(freq).filter(n=>freq[n]<=1).map(Number);
+    const gap10=Object.keys(lastSeen).filter(n=>20-lastSeen[n]>=10).map(Number);
+    const gap15=Object.keys(lastSeen).filter(n=>20-lastSeen[n]>=15).map(Number);
+    const gap20=Object.keys(lastSeen).filter(n=>20-lastSeen[n]>=20).map(Number);
 
-    let picks = [];
-    while (picks.length < 10 && pool.length >= 5) {
-      let c = [];
-      while (c.length < 5) {
-        const n = pool[Math.floor(Math.random() * pool.length)];
-        if (!c.includes(n)) c.push(n);
-      }
-      const odd = c.filter(n => n % 2).length;
-      const sum = c.reduce((a, b) => a + b, 0);
-      if ((odd === 2 || odd === 3) && sum >= 70 && sum <= 115) {
-        picks.push(c.sort((a,b)=>a-b));
-      }
+    function evalPick(p){
+      return p.filter(n=>target.includes(n)).length;
     }
 
-    let best = 0;
-    picks.forEach(p => {
-      const h = p.filter(n => target.includes(n)).length;
-      best = Math.max(best, h);
-    });
+    // 策略 A
+    if(hot.length>=2 && gap10.length>=1){
+      const p=[hot[0],hot[1],gap10[0],gap10[1]||hot[2],hot[3]||gap10[2]].slice(0,5);
+      const h=evalPick(p);
+      if(h>=2)strategies.A.hit2++;
+      if(h>=3)strategies.A.hit3++;
+      if(h>=4)strategies.A.hit4++;
+    }
 
-    if (best >= 2) hit2++;
-    if (best >= 3) hit3++;
-    if (best >= 4) hit4++;
-    if (best < 3) no3++; else no3 = 0;
+    // 策略 B
+    if(gap15.length>=1 && hot.length>=2){
+      const p=[gap15[0],gap15[1]||hot[0],hot[1],hot[2],hot[3]].slice(0,5);
+      const h=evalPick(p);
+      if(h>=2)strategies.B.hit2++;
+      if(h>=3)strategies.B.hit3++;
+      if(h>=4)strategies.B.hit4++;
+    }
 
-    rows += `<tr class="${best>=3?'hit3':best>=2?'hit2':''}">
-      <td>${data[i].date}</td>
-      <td>${best}</td>
-      <td>${picks.map(p=>'['+p.join(' ')+']').join('<br>')}</td>
+    // 策略 C
+    if(gap20.length>=2 && cold.length>=3){
+      const p=[gap20[0],gap20[1],cold[0],cold[1],cold[2]];
+      const h=evalPick(p);
+      if(h>=2)strategies.C.hit2++;
+      if(h>=3)strategies.C.hit3++;
+      if(h>=4)strategies.C.hit4++;
+    }
+  }
+
+  // 找 ≥3 勝率最高
+  let bestKey=null, bestRate=0;
+  Object.keys(strategies).forEach(k=>{
+    const r=strategies[k].hit3/total;
+    if(r>bestRate){bestRate=r;bestKey=k;}
+  });
+
+  let html=`<h3>策略回測結果（共 ${total} 期）</h3>
+  <table>
+  <tr><th>策略</th><th>≥2</th><th>≥3</th><th>≥4</th></tr>`;
+
+  Object.keys(strategies).forEach(k=>{
+    const s=strategies[k];
+    html+=`<tr class="${k===bestKey?'best':''}">
+      <td>${s.name}${k===bestKey?'（保留）':''}</td>
+      <td>${(s.hit2/total*100).toFixed(1)}%</td>
+      <td>${(s.hit3/total*100).toFixed(1)}%</td>
+      <td>${(s.hit4/total*100).toFixed(1)}%</td>
     </tr>`;
-  }
+  });
 
-  document.getElementById('summary').innerHTML = `
-  <h3>回測結果</h3>
-  可回測期數：${data.length - 10}<br>
-  出手期數：${data.length - 10}<br>
-  ≥2：${(hit2/(data.length-10)*100).toFixed(1)}%<br>
-  ≥3：${(hit3/(data.length-10)*100).toFixed(1)}%<br>
-  ≥4：${(hit4/(data.length-10)*100).toFixed(1)}%
-  `;
-
-  document.getElementById('warn').innerHTML =
-    no3 >= 20 ? `<div class="warn">⚠ 已連續 ${no3} 期未出 ≥3，建議停手</div>` : '';
-
-  document.getElementById('log').innerHTML =
-    `<table><tr><th>日期</th><th>命中</th><th>出手組合</th></tr>${rows}</table>`;
-
-  predictNext(data);
-}
-
-function predictNext(data) {
-  const hist = data.slice(-10);
-  const freq = {};
-  hist.forEach(d => d.nums.forEach(n => freq[n] = (freq[n] || 0) + 1));
-  const hot = Object.keys(freq).filter(n => freq[n] >= 2).map(Number);
-
-  const pool = hot.sort(() => 0.5 - Math.random()).slice(0, 10);
-  let result = [];
-  while (result.length < 10 && pool.length >= 5) {
-    let c = [];
-    while (c.length < 5) {
-      const n = pool[Math.floor(Math.random() * pool.length)];
-      if (!c.includes(n)) c.push(n);
-    }
-    const odd = c.filter(n => n % 2).length;
-    const sum = c.reduce((a,b)=>a+b,0);
-    if ((odd === 2 || odd === 3) && sum >= 70 && sum <= 115)
-      result.push(c.sort((a,b)=>a-b));
-  }
-
-  document.getElementById('next').innerHTML = `
-  <h3>📌 1/14 模擬預測（10 組）</h3>
-  ${result.map(p=>'['+p.join(' ')+']').join('<br>')}
-  `;
+  html+=`</table>`;
+  document.getElementById('result').innerHTML=html;
 }
 </script>
 </body>
