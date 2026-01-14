@@ -2,25 +2,23 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>539 穩定策略回測與預測</title>
+<title>539 預測品質控管系統</title>
 <style>
 body { font-family: Arial; padding: 20px; }
-table { border-collapse: collapse; margin-top: 10px; }
+table { border-collapse: collapse; }
 td, th { border: 1px solid #ccc; padding: 6px; text-align: center; }
-.hit2 { background: #d0f0d0; }
-.hit3 { background: #90e090; font-weight: bold; }
-.reject { color: #b00000; font-weight: bold; }
+.pass { color: green; font-weight: bold; }
+.fail { color: red; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h2>539 穩定策略回測系統（可重現）</h2>
+<h2>539 下期預測與 ≥2 品質驗證</h2>
 <input type="file" id="csvFile" accept=".csv">
-<button onclick="run()">執行回測</button>
+<button onclick="run()">執行</button>
 
-<div id="summary"></div>
-<div id="next"></div>
-<div id="stable"></div>
+<div id="predict"></div>
+<div id="qc"></div>
 
 <script>
 function parseCSV(text){
@@ -34,84 +32,61 @@ function run(){
   const f=document.getElementById('csvFile').files[0];
   if(!f) return alert('請上傳 CSV');
   const r=new FileReader();
-  r.onload=e=>simulate(parseCSV(e.target.result));
+  r.onload=e=>main(parseCSV(e.target.result));
   r.readAsText(f);
 }
 
-function simulate(data){
-  let hit2=0, hit3=0;
-  const total=data.length-10;
-  const comboScore={};
+function gen3Picks(hist){
+  const freq={}, lastSeen={};
+  hist.forEach((d,idx)=>d.nums.forEach(n=>{
+    freq[n]=(freq[n]||0)+1;
+    lastSeen[n]=idx;
+  }));
+
+  const hot=Object.keys(freq).filter(n=>freq[n]>=2).map(Number)
+    .sort((a,b)=>freq[b]-freq[a]);
+
+  const gap=Object.keys(lastSeen).filter(n=>10-lastSeen[n]>=8).map(Number)
+    .sort((a,b)=>(10-lastSeen[b])-(10-lastSeen[a]));
+
+  const base=[...hot.slice(0,5),...gap.slice(0,5)];
+
+  const picks=[];
+  for(let i=0;i<3;i++){
+    picks.push(base.slice(i,i+5).sort((a,b)=>a-b));
+  }
+  return picks;
+}
+
+function main(data){
+  let hit=0, total=0;
 
   for(let i=10;i<data.length;i++){
     const hist=data.slice(i-10,i);
     const target=data[i].nums;
+    const picks=gen3Picks(hist);
 
-    const freq={}, lastSeen={};
-    hist.forEach((d,idx)=>d.nums.forEach(n=>{
-      freq[n]=(freq[n]||0)+1;
-      lastSeen[n]=idx;
-    }));
-
-    const hot=Object.keys(freq).filter(n=>freq[n]>=2).map(Number)
-      .sort((a,b)=>freq[b]-freq[a]);
-
-    const gap=Object.keys(lastSeen)
-      .filter(n=>10-lastSeen[n]>=10)
-      .map(Number)
-      .sort((a,b)=>(10-lastSeen[b])-(10-lastSeen[a]));
-
-    if(hot.length<3 || gap.length<2) continue;
-
-    const pick=[hot[0],hot[1],hot[2],gap[0],gap[1]].sort((a,b)=>a-b);
-    const key=pick.join('-');
-
-    const h=pick.filter(n=>target.includes(n)).length;
-    if(h>=2) hit2++;
-    if(h>=3) hit3++;
-
-    comboScore[key]=(comboScore[key]||0)+(h>=2?1:0);
+    const ok=picks.some(p=>p.filter(n=>target.includes(n)).length>=2);
+    if(ok) hit++;
+    total++;
   }
 
-  const rate2=hit2/total*100;
-  const rate3=hit3/total*100;
+  const rate=(hit/total*100).toFixed(1);
 
-  document.getElementById('summary').innerHTML=`
-  <h3>回測結果</h3>
-  可回測期數：${total}<br>
-  ≥2：${rate2.toFixed(1)}%<br>
-  ≥3：${rate3.toFixed(1)}%
+  // 下期
+  const nextPicks=gen3Picks(data.slice(-10));
+
+  document.getElementById('predict').innerHTML=`
+  <h3>📌 下期預測牌組（3 組）</h3>
+  ${nextPicks.map(p=>'['+p.join(' ')+']').join('<br>')}
   `;
 
-  if(rate2<70){
-    document.getElementById('next').innerHTML='';
-    document.getElementById('stable').innerHTML=
-      `<div class="reject">❌ ≥2 未達 70%，策略淘汰</div>`;
-    return;
-  }
-
-  // 最穩前三組
-  const stableTop=Object.entries(comboScore)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,3);
-
-  document.getElementById('stable').innerHTML=`
-  <h3>系統最穩前三組（歷史 ≥2 命中次數最高）</h3>
-  ${stableTop.map((c,i)=>`#${i+1} [${c[0].replaceAll('-', ' ')}]（命中 ${c[1]} 次）`).join('<br>')}
-  `;
-
-  // 下期預測（固定邏輯）
-  const lastHist=data.slice(-10);
-  const f2={};
-  lastHist.forEach(d=>d.nums.forEach(n=>f2[n]=(f2[n]||0)+1));
-  const hotNow=Object.keys(f2).filter(n=>f2[n]>=2).map(Number)
-    .sort((a,b)=>f2[b]-f2[a]);
-
-  const nextPick=hotNow.slice(0,5).sort((a,b)=>a-b);
-
-  document.getElementById('next').innerHTML=`
-  <h3>📌 下期預測牌組（穩定盤）</h3>
-  [${nextPick.join(' ')}]
+  document.getElementById('qc').innerHTML=`
+  <h3>≥2 預期命中率驗證</h3>
+  歷史模擬 ≥2 命中率：${rate}%<br>
+  ${rate>=70
+    ?'<span class="pass">✔ 通過（可出手）</span>'
+    :'<span class="fail">✘ 未通過（本期不出手）</span>'}
   `;
 }
 </script>
