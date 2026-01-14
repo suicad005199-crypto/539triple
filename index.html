@@ -2,125 +2,125 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>539 大數據與尾數分析器</title>
+    <title>今彩 539 數據分析器</title>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .section { margin-bottom: 30px; padding: 20px; border-radius: 10px; background: #fff; border: 1px solid #eee; }
-        h2 { color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 10px; }
-        .ball-container { display: flex; justify-content: center; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
-        .ball { width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background: #d32f2f; color: white; font-weight: bold; text-align: center; }
-        .tail-ball { background: #2980b9; }
-        button { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1.1em; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 900px; margin: 20px auto; background: #f0f2f5; color: #333; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .upload-section { border: 2px dashed #3498db; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 25px; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .btn:hover { background: #2980b9; }
+        .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; display: none; }
+        .card { border: 1px solid #eee; padding: 15px; border-radius: 8px; background: #fff; }
+        .num-ball { display: inline-block; width: 40px; height: 40px; line-height: 40px; background: #e74c3c; color: white; border-radius: 50%; margin: 5px; text-align: center; font-weight: bold; font-size: 18px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
         th { background: #f8f9fa; }
-        .highlight { color: #e67e22; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>539 數據分析系統</h2>
-    
-    <div class="section">
-        <strong>1. 數據上傳</strong>
-        <input type="file" id="csvFile" accept=".csv" style="margin-top:10px;">
+    <h2>🎯 獎號分析與下期預測</h2>
+    <div class="upload-section">
+        <input type="file" id="csvFile" accept=".csv">
+        <button class="btn" onclick="analyzeCSV()">上傳並分析</button>
     </div>
 
-    <div class="section">
-        <strong>2. 歷史最強熱門組 (Top 5)</strong>
-        <div class="ball-container" id="hotResult"></div>
-    </div>
+    <div id="resultArea" class="result-grid">
+        <div class="card" style="grid-column: 1 / -1; text-align: center;">
+            <h3>🔮 下期推薦號碼 (基於近期權重)</h3>
+            <div id="prediction"></div>
+        </div>
 
-    <div class="section">
-        <strong>3. 尾數遺漏分析 (最久沒開出的尾數)</strong>
-        <div id="tailAnalysis">等待數據分析...</div>
-        <div class="ball-container" id="tailRecommend"></div>
-    </div>
+        <div class="card">
+            <h3>📈 歷史熱門排行榜 (前 10 名)</h3>
+            <div id="hotStats"></div>
+        </div>
 
-    <button id="predictBtn" disabled onclick="runAnalysis()">執行全面數據預測</button>
+        <div class="card">
+            <h3>⏳ 遺漏分析 (最久未出現)</h3>
+            <div id="coldStats"></div>
+        </div>
+    </div>
 </div>
 
 <script>
-    let rawData = []; // 儲存所有期數數據
+function analyzeCSV() {
+    const file = document.getElementById('csvFile').files[0];
+    if (!file) return alert("請選擇 CSV 檔案");
 
-    document.getElementById('csvFile').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const lines = event.target.result.trim().split('\n');
-            rawData = lines.slice(1).map(line => line.split(',')); // 排除標題列
-            document.getElementById('predictBtn').disabled = false;
-            alert("數據讀取完成！");
-        };
-        reader.readAsText(file);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const rows = e.target.result.split('\n')
+            .map(row => row.split(',').map(cell => cell.trim()))
+            .filter(row => row.length >= 6 && !isNaN(parseInt(row[1])));
+
+        processNumbers(rows);
+    };
+    reader.readAsText(file);
+}
+
+function processNumbers(data) {
+    let freq = {}; // 總頻率
+    let lastSeen = {}; // 最後出現位置
+    let totalRows = data.length;
+
+    // 初始化 1-39 號 (假設為 539)
+    for (let i = 1; i <= 39; i++) {
+        freq[i] = 0;
+        lastSeen[i] = -1;
+    }
+
+    // 越往下資料越新，故 index 越大權重越高
+    let weightedPool = [];
+    
+    data.forEach((row, idx) => {
+        for (let i = 1; i <= 5; i++) {
+            let num = parseInt(row[i]);
+            if (!isNaN(num)) {
+                freq[num]++;
+                lastSeen[num] = idx;
+                // 權重設計：近期出現的號碼增加進入隨機池的次數
+                let weight = Math.floor((idx / totalRows) * 10) + 1;
+                for(let w=0; w<weight; w++) weightedPool.push(num);
+            }
+        }
     });
 
-    function runAnalysis() {
-        if (rawData.length === 0) return;
+    displayStats(freq, lastSeen, totalRows, weightedPool);
+}
 
-        // --- 1. 熱門號碼統計 ---
-        let counts = {};
-        rawData.forEach(row => {
-            for (let i = 1; i <= 5; i++) {
-                let num = parseInt(row[i]);
-                if (!isNaN(num)) counts[num] = (counts[num] || 0) + 1;
-            }
-        });
+function displayStats(freq, lastSeen, totalRows, pool) {
+    document.getElementById('resultArea').style.display = 'grid';
 
-        let sortedHot = Object.keys(counts).map(k => ({n: k, c: counts[k]}))
-                        .sort((a,b) => b.c - a.c).slice(0, 5);
-        displayBalls('hotResult', sortedHot.map(x => x.n).sort((a,b)=>a-b), 'ball');
-
-        // --- 2. 尾數遺漏分析 (幾尾最久沒開) ---
-        // 紀錄 0-9 尾最後一次出現的 index (0 為最新一期)
-        let lastSeenTail = Array(10).fill(-1); 
-        
-        for (let i = 0; i < rawData.length; i++) {
-            for (let j = 1; j <= 5; j++) {
-                let num = parseInt(rawData[i][j]);
-                if (!isNaN(num)) {
-                    let tail = num % 10;
-                    if (lastSeenTail[tail] === -1) {
-                        lastSeenTail[tail] = i; // 紀錄是第幾期前出現的
-                    }
-                }
-            }
-        }
-
-        // 找出遺漏期數最長的尾數
-        let tailSorted = lastSeenTail.map((val, idx) => ({tail: idx, missing: val}))
-                         .sort((a, b) => b.missing - a.missing);
-
-        let longestMissingTail = tailSorted[0];
-        
-        // --- 3. 顯示分析結果 ---
-        const tailDiv = document.getElementById('tailAnalysis');
-        tailDiv.innerHTML = `
-            <p>目前最久沒開出的尾數是：<span class="highlight">${longestMissingTail.tail} 尾</span></p>
-            <p>已連續遺漏 <span class="highlight">${longestMissingTail.missing} 期</span> 未現身。</p>
-            <p>該尾數推薦號碼：</p>
-        `;
-
-        // 推薦該尾數的所有號碼
-        let recommend = [];
-        for(let i=1; i<=39; i++) {
-            if(i % 10 === longestMissingTail.tail) recommend.push(i);
-        }
-        displayBalls('tailRecommend', recommend, 'ball tail-ball');
+    // 1. 生成預測號碼 (隨機取 5 個不重複)
+    let pred = new Set();
+    while(pred.size < 5) {
+        let n = pool[Math.floor(Math.random() * pool.length)];
+        pred.add(n);
     }
+    const sortedPred = Array.from(pred).sort((a,b) => a-b);
+    document.getElementById('prediction').innerHTML = 
+        sortedPred.map(n => `<span class="num-ball">${n}</span>`).join('');
 
-    function displayBalls(id, nums, className) {
-        const container = document.getElementById(id);
-        container.innerHTML = '';
-        nums.forEach(n => {
-            const b = document.createElement('div');
-            b.className = className;
-            b.innerText = n.toString().padStart(2, '0');
-            container.appendChild(b);
-        });
-    }
+    // 2. 熱門排行榜
+    const hotSorted = Object.entries(freq).sort((a,b) => b[1] - a[1]).slice(0, 10);
+    let hotHtml = '<table><tr><th>號碼</th><th>次數</th></tr>';
+    hotSorted.forEach(item => {
+        hotHtml += `<tr><td>${item[0]}</td><td>${item[1]}</td></tr>`;
+    });
+    document.getElementById('hotStats').innerHTML = hotHtml + '</table>';
+
+    // 3. 遺漏分析
+    const coldSorted = Object.entries(lastSeen)
+        .sort((a,b) => a[1] - b[1]).slice(0, 10);
+    let coldHtml = '<table><tr><th>號碼</th><th>未開期數</th></tr>';
+    coldSorted.forEach(item => {
+        let missed = totalRows - 1 - item[1];
+        coldHtml += `<tr><td>${item[0]}</td><td>${missed} 期</td></tr>`;
+    });
+    document.getElementById('coldStats').innerHTML = coldHtml + '</table>';
+}
 </script>
 
 </body>
