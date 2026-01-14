@@ -2,19 +2,16 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>539 回測系統｜≥4 共振期專用</title>
+<title>539 回測系統｜≥3 高置信盤</title>
 <style>
 body { font-family: Arial; padding: 20px; }
-table { border-collapse: collapse; margin-top: 10px; }
-th, td { border: 1px solid #999; padding: 4px 6px; text-align: center; }
-th { background: #eee; }
 .hit { color: red; font-weight: bold; }
-.period { margin-top: 25px; border-top: 2px solid #444; padding-top: 10px; }
+.period { margin-top: 20px; border-top: 2px solid #444; padding-top: 10px; }
 </style>
 </head>
 <body>
 
-<h2>539 回測系統（≥4 結構共振期）</h2>
+<h2>539 回測系統（≥3 高置信盤型）</h2>
 <input type="file" id="csvFile" accept=".csv">
 <br><button onclick="run()">執行回測</button>
 
@@ -36,7 +33,7 @@ function run(){
   r.onload=()=>{
     const d=parseCSV(r.result);
 
-    let total=0, played=0, hit4=0;
+    let total=0, played=0, hit3=0;
     let detail="";
 
     for(let i=30;i<d.length;i++){
@@ -44,36 +41,38 @@ function run(){
       const hist=d.slice(0,i);
       const act=d[i];
 
-      // === Gap / 熱度 ===
-      const gap={}, freq={};
+      const gap={}, freq={}, tailFreq={};
       for(let n=1;n<=39;n++){ gap[n]=0; freq[n]=0; }
+      hist.slice(-10).forEach(dr=>{
+        dr.nums.forEach(n=>{
+          freq[n]++;
+          tailFreq[n%10]=(tailFreq[n%10]||0)+1;
+        });
+      });
 
       hist.forEach(dr=>{
         for(let n=1;n<=39;n++) gap[n]++;
-        dr.nums.forEach(n=>{ gap[n]=0; freq[n]++; });
+        dr.nums.forEach(n=>gap[n]=0);
       });
 
-      // === 評分 ===
+      // 評分
       const score={};
       for(let n=1;n<=39;n++){
         let s=0;
-        if(gap[n]>=18) s+=5;
-        else if(gap[n]>=12) s+=3;
-
-        if(freq[n]>=4) s+=4;
-        else if(freq[n]>=3) s+=3;
-
+        if(freq[n]>=3) s+=3;
+        if(gap[n]>=10) s+=2;
         score[n]=s;
       }
 
-      // ⭐ Top 8
       const pool=Object.keys(score)
         .sort((a,b)=>score[b]-score[a])
-        .slice(0,8).map(Number);
+        .slice(0,7).map(Number);
 
-      // 組合（C(8,5)=56）
-      let best=null, maxScore=0;
+      // 熱度同步
+      if(pool.filter(n=>freq[n]>=3).length<4) continue;
 
+      // 組合
+      const combos=[];
       for(let a=0;a<pool.length;a++)
       for(let b=a+1;b<pool.length;b++)
       for(let c=b+1;c<pool.length;c++)
@@ -81,49 +80,43 @@ function run(){
       for(let f=e+1;f<pool.length;f++){
         const p=[pool[a],pool[b],pool[c],pool[e],pool[f]];
 
-        // 條件 ② 尾數
-        const tails={}, hotTails=[];
+        // 尾數共振
+        const tails={};
         p.forEach(n=>tails[n%10]=(tails[n%10]||0)+1);
+        let ok=false;
         for(const t in tails){
-          if(tails[t]>=2){
-            const count = hist.slice(-10).flatMap(x=>x.nums)
-              .filter(n=>n%10==t).length;
-            if(count>=3) hotTails.push(t);
-          }
+          if(tails[t]>=2 && tailFreq[t]>=3) ok=true;
         }
-        if(hotTails.length===0) continue;
+        if(!ok) continue;
 
-        // 條件 ③ Gap ≥18 至少 2 顆
-        if(p.filter(n=>gap[n]>=18).length<2) continue;
+        // 總和
+        const sum=p.reduce((x,n)=>x+n,0);
+        if(sum<80||sum>105) continue;
 
-        // 條件 ④ 熱度同步
-        if(p.filter(n=>freq[n]>=3).length<3) continue;
-
-        // 評分
         const ps=p.reduce((x,n)=>x+score[n],0);
-        if(ps>maxScore){
-          maxScore=ps;
-          best=p;
-        }
+        combos.push({p, ps});
       }
 
-      if(!best) continue; // ❌ 不出手
+      combos.sort((a,b)=>b.ps-a.ps);
+      if(combos.length===0) continue;
 
       played++;
+      const plays=combos.slice(0,3);
+      let max=0;
 
-      let hit=0;
-      const cells=best.map(n=>{
-        if(act.nums.includes(n)){ hit++; return `<span class="hit">${n}</span>`;}
-        return n;
+      plays.forEach(c=>{
+        let h=0;
+        c.p.forEach(n=>{ if(act.nums.includes(n)) h++; });
+        if(h>max) max=h;
       });
 
-      if(hit>=4) hit4++;
+      if(max>=3) hit3++;
 
       detail+=`
         <div class="period">
-          <b>${act.date}</b>｜開獎：${act.nums.join(", ")}<br>
-          出手牌：${cells.join(" , ")}<br>
-          命中：${hit}
+          ${act.date}｜開獎：${act.nums.join(", ")}<br>
+          出手：${plays.map(c=>c.p.join("-")).join(" / ")}<br>
+          本期最高命中：${max}
         </div>
       `;
     }
@@ -131,7 +124,7 @@ function run(){
     document.getElementById("summary").innerHTML=`
       可回測期數：${total}<br>
       出手期數：${played}<br>
-      出手期 ≥4：${played? (hit4/played*100).toFixed(1):0}%
+      出手期 ≥3：${played? (hit3/played*100).toFixed(1):0}%
     `;
     document.getElementById("detail").innerHTML=detail;
   };
