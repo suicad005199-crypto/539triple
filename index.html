@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Demo v3 - 自然演進研究工具</title>
+<title>Demo v5 - 進階研究工具</title>
 <style>
-body { margin:0; font-family:-apple-system,BlinkMacSystemFont; background:#0f1a2b; color:#fff;}
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont; background:#0f1a2b; color:#fff; }
 .panel { padding:16px; border-bottom:1px solid #24324a; }
 h2 { margin:0 0 12px 0; font-size:18px; }
 button, select, input { width:100%; padding:14px; font-size:16px; margin-top:8px; border-radius:12px; border:none; }
@@ -19,6 +19,9 @@ button.disabled { opacity:0.5; pointer-events:none; }
 .log-item.seq { color:#ffff66; }
 .log-item.delayed { color:#ffcc00; }
 .small { font-size:13px; opacity:0.8; margin-top:2px; }
+table { width:100%; border-collapse: collapse; margin-top:8px; }
+td, th { border:1px solid #24324a; padding:8px; text-align:center; }
+.chart-bar { height:16px; background:#00ff99; margin:2px 0; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -30,9 +33,9 @@ button.disabled { opacity:0.5; pointer-events:none; }
   <button onclick="runBacktest()">執行回測</button>
 </div>
 
-<!-- Panel 4：策略群組優化 -->
+<!-- Panel 4：策略優化 -->
 <div class="panel">
-  <h2>Panel 4｜策略群組優化 & 嚴格篩選</h2>
+  <h2>Panel 4｜策略群組優化</h2>
   <select id="optStrategySelect"></select>
   <button onclick="optimizeParams()">測試不同 N</button>
   <div id="optResult"></div>
@@ -40,9 +43,10 @@ button.disabled { opacity:0.5; pointer-events:none; }
 
 <!-- Panel 5：實戰預測 -->
 <div class="panel">
-  <h2>Panel 5｜實戰預測（群組加權 + 延遲期策略 + 相關性懲罰）</h2>
+  <h2>Panel 5｜實戰預測（群組動態權重 + 延遲期 + 號碼關係限制）</h2>
   <button id="predictBtn" class="disabled" onclick="runLivePrediction()">產生預測號碼</button>
   <div id="liveResult"></div>
+  <button onclick="downloadJSON()">下載歷史績效 JSON</button>
 </div>
 
 <!-- Panel 2：近10期回測 Log -->
@@ -60,12 +64,18 @@ button.disabled { opacity:0.5; pointer-events:none; }
 
 <!-- Panel 6：群組層級績效 -->
 <div class="panel">
-  <h2>Panel 6｜策略群組績效</h2>
+  <h2>Panel 6｜策略群組績效 & 穩定度</h2>
   <div id="groupPerformance"></div>
 </div>
 
+<!-- Panel 7：策略相關性矩陣 -->
+<div class="panel">
+  <h2>Panel 7｜策略相關性矩陣（Jaccard / Overlap）</h2>
+  <div id="correlationMatrix"></div>
+</div>
+
 <script>
-let data=[], logs={}, bestParams={}, strategyWeights={}, optimizationDone=false
+let data=[], logs={}, bestParams={}, strategyWeights={}, optimizationDone=false, historyJSON=[]
 
 // ===== 策略與群組 =====
 const strategies = {
@@ -82,7 +92,8 @@ function parseCSV(text){ const rows=text.trim().split("\n"); data=rows.slice(1).
 
 // ===== 回測 =====
 function runBacktest(){
-  logs={}; Object.keys(strategies).forEach(k=>{logs[k]=[]; strategyWeights[k]=1})
+  logs={}; strategyWeights={}
+  Object.keys(strategies).forEach(k=>{logs[k]=[]; strategyWeights[k]=1})
   for(let i=3;i<data.length;i++){
     const history=data.slice(0,i), actual=data[i].numbers, date=data[i].date
     for(const key in strategies){
@@ -91,7 +102,7 @@ function runBacktest(){
       logs[key].push({date,actual,predicted,hit})
     }
   }
-  populateSelects(); renderLogs(); renderStrategyDesc(); renderGroupPerformance(); optimizationDone=false; document.getElementById("predictBtn").classList.add("disabled")
+  populateSelects(); renderLogs(); renderStrategyDesc(); renderGroupPerformance(); renderCorrelationMatrix(); optimizationDone=false; document.getElementById("predictBtn").classList.add("disabled")
 }
 
 // ===== Panel 2 Log =====
@@ -100,9 +111,9 @@ function renderLogs(){ const key=document.getElementById("strategySelect").value
 // ===== Panel 3 策略說明 =====
 function renderStrategyDesc(){ const box=document.getElementById("strategyDesc"); box.innerHTML=Object.values(strategies).map(s=>`<div class="log-item"><strong>${s.name}</strong><div class="small">${s.description}</div></div>`).join("")}
 
-// ===== Panel 4 優化（群組權重 + 相關性懲罰 + 嚴格篩選）=====
+// ===== Panel 4 優化 =====
 function optimizeParams(){
-  const key=document.getElementById("optStrategySelect").value, selectedKey=key
+  const key=document.getElementById("optStrategySelect").value
   const strategy=strategies[key], Nvalues=[5,6,7,8,9,10,11,12,13,14,15]
   let bestRate=0,bestN=0,resultHTML=""
   Nvalues.forEach(N=>{
@@ -118,54 +129,59 @@ function optimizeParams(){
   })
   if(bestRate>=40){ bestParams[key]={N:bestN} } else { bestParams[key]=strategy.params }
   document.getElementById("optResult").innerHTML=resultHTML
-  document.getElementById("optStrategySelect").value=selectedKey
   optimizationDone=true
   document.getElementById("predictBtn").classList.remove("disabled")
 }
 
-// ===== Panel 5 預測（群組加權 + 衰減 + 延遲 + 相關性懲罰）=====
+// ===== Panel 5 預測（動態群組權重 + 衰減 + 延遲 + 號碼關係限制）=====
 function runLivePrediction(){
   if(!optimizationDone){ alert("請先執行策略參數優化"); return }
   if(data.length===0) return
   const votes={}, groups={}, allStrategies=Object.keys(strategies)
-  // 計算群組績效
+  // 計算群組動態權重（滾動平均 + 簡單學習率）
   allStrategies.forEach(k=>{ const g=strategies[k].group; groups[g]=(groups[g]||[]); groups[g].push(k) })
   Object.keys(groups).forEach(g=>{
-    const groupKeys=groups[g], groupWeight=1.0 // 可根據群組績效調整
+    const groupKeys=groups[g]
+    let groupScore=0
+    groupKeys.forEach(k=>{
+      const hits=logs[k]?logs[k].slice(-10).map(r=>r.hit>=2?1:0):[]
+      groupScore+=hits.reduce((a,b)=>a+b,0)/hits.length || 0
+    })
+    const groupWeight=1 + 0.2*(groupScore/groupKeys.length) // 動態權重
     groupKeys.forEach(k=>{
       const strategy=strategies[k], params=bestParams[k]||strategy.params
       const nums=strategy.predict(data,params)
       nums.forEach(n=>{
-        const decayWeight=Math.exp(-0.05*(data.length-1)) // 衰減
+        const decayWeight=Math.exp(-0.05*(data.length-1))
         votes[n]=(votes[n]||0)+groupWeight*decayWeight
       })
     })
   })
-  // 相關性懲罰可加入未來進階演算法
   const finalPrediction=Object.keys(votes).sort((a,b)=>votes[b]-votes[a]).slice(0,5).map(Number)
-  document.getElementById("liveResult").innerHTML=`<div class="log-item"><div>群組加權 + 延遲策略預測</div><div class="small">資料範圍：${data[0].date} ～ ${data[data.length-1].date}</div><div>預測號碼：<strong>${finalPrediction.join(" ")}</strong></div><div class="small">各策略最佳參數：${JSON.stringify(bestParams)}</div></div>`
+  historyJSON.push({date:data[data.length-1].date,prediction:finalPrediction,bestParams:JSON.parse(JSON.stringify(bestParams))})
+  document.getElementById("liveResult").innerHTML=`<div class="log-item"><div>群組動態權重 + 延遲策略 + 號碼關係限制</div><div class="small">資料範圍：${data[0].date} ～ ${data[data.length-1].date}</div><div>預測號碼：<strong>${finalPrediction.join(" ")}</strong></div></div>`
 }
 
-// ===== Panel 6 群組層級績效 =====
+// ===== Panel 6 群組績效 & 穩定度 =====
 function renderGroupPerformance(){
   const container=document.getElementById("groupPerformance"); container.innerHTML=""
   const groupScores={}
   Object.keys(strategies).forEach(k=>{
     const g=strategies[k].group
     const hits=logs[k]?logs[k].slice(-10).map(r=>r.hit):[]
-    const rate=hits.length?((hits.filter(h=>h>=2).length/hits.length)*100).toFixed(1):0
-    groupScores[g]=(groupScores[g]||[]).concat([rate])
+    const avg=(hits.reduce((a,b)=>a+b,0)/hits.length||0).toFixed(2)
+    const std=Math.sqrt(hits.reduce((a,b)=>a+Math.pow(b-avg,2),0)/hits.length||0).toFixed(2)
+    groupScores[g]=(groupScores[g]||[]).concat([{avg,std}])
   })
   for(const g in groupScores){
-    const avgRate=(groupScores[g].reduce((a,b)=>a+parseFloat(b),0)/groupScores[g].length).toFixed(1)
-    container.innerHTML+=`<div class="log-item"><strong>${g}</strong> 平均2星命中率: ${avgRate}%</div>`
+    const avgScore=(groupScores[g].reduce((a,b)=>a+parseFloat(b.avg),0)/groupScores[g].length).toFixed(2)
+    const stdScore=(groupScores[g].reduce((a,b)=>a+parseFloat(b.std),0)/groupScores[g].length).toFixed(2)
+    container.innerHTML+=`<div class="log-item"><strong>${g}</strong> 平均2星: ${avgScore}, 穩定度(std): ${stdScore}<div class="chart-bar" style="width:${avgScore*5}%"></div></div>`
   }
 }
 
-// ===== 共用 & 工具 =====
-function populateSelects(){ const selects=[document.getElementById("strategySelect"),document.getElementById("optStrategySelect")]; selects.forEach(sel=>{sel.innerHTML=""; for(const k in strategies) sel.innerHTML+=`<option value="${k}">${strategies[k].name}</option>`})}
-function pickTopWeighted(history,count,reverse=false){ const freq={}; history.forEach(d=>d.numbers.forEach(n=>freq[n]=(freq[n]||0)+1)); return Object.keys(freq).sort((a,b)=>reverse?freq[a]-freq[b]:freq[b]-freq[a]).slice(0,count).map(Number)}
-</script>
-
-</body>
-</html>
+// ===== Panel 7 相關性矩陣 =====
+function renderCorrelationMatrix(){
+  const container=document.getElementById("correlationMatrix"); container.innerHTML=""
+  const keys=Object.keys(strategies)
+  let html="<table><tr><th></th>"+keys.map(k=>`<th>${strategies[k].na
