@@ -3,17 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Demo v1</title>
+<title>Demo v1 - 升級版</title>
 <style>
 body { margin:0; font-family:-apple-system,BlinkMacSystemFont; background:#0f1a2b; color:#fff;}
 .panel { padding:16px; border-bottom:1px solid #24324a; }
 h2 { margin:0 0 12px 0; font-size:18px; }
-button, select, input { width:100%; padding:14px; font-size:16px; margin-top:8px; border-radius:10px; border:none; }
-button { background:#1e3a5f; color:#fff; }
-.log-item { background:#16253d; padding:12px; border-radius:10px; margin-bottom:10px; }
+button, select, input { width:100%; padding:14px; font-size:16px; margin-top:8px; border-radius:12px; border:none; }
+button { background:#1e3a5f; color:#fff; transition:0.2s; }
+button:hover:not(.disabled){ background:#2a4a7f; cursor:pointer; }
+button.disabled { opacity:0.5; pointer-events:none; }
+.log-item { background:#16253d; padding:12px; border-radius:12px; margin-bottom:10px; }
 .log-item.best { border:2px solid #00ff99; }
-.small { font-size:13px; opacity:0.8; }
-.disabled { opacity:0.5; pointer-events:none; }
+.log-item.hot { color:#ff6666; }
+.log-item.cold { color:#66ccff; }
+.log-item.seq { color:#ffff66; }
+.small { font-size:13px; opacity:0.8; margin-top:2px; }
 </style>
 </head>
 <body>
@@ -25,101 +29,108 @@ button { background:#1e3a5f; color:#fff; }
   <button onclick="runBacktest()">執行回測</button>
 </div>
 
-<!-- Panel 4：策略優化 -->
+<!-- Panel 4：策略優化（升級） -->
 <div class="panel">
-  <h2>Panel 4｜策略參數優化 & 自動套用最佳 N</h2>
+  <h2>Panel 4｜策略參數優化 & 嚴格篩選</h2>
   <select id="optStrategySelect"></select>
-  <button id="optBtn" onclick="optimizeParams()">測試不同 N</button>
+  <button onclick="optimizeParams()">測試不同 N</button>
   <div id="optResult"></div>
 </div>
 
-<!-- Panel 5：實戰預測 -->
+<!-- Panel 5：實戰預測（加權） -->
 <div class="panel">
   <h2>Panel 5｜實戰預測（多策略加權）</h2>
   <button id="predictBtn" class="disabled" onclick="runLivePrediction()">產生預測號碼</button>
   <div id="liveResult"></div>
 </div>
 
-<!-- Panel 2 -->
+<!-- Panel 2：近10期回測 Log -->
 <div class="panel">
   <h2>Panel 2｜近10期回測 Log + 2星命中率%</h2>
   <select id="strategySelect" onchange="renderLogs()"></select>
   <div id="logContainer"></div>
 </div>
 
-<!-- Panel 3 -->
+<!-- Panel 3：策略說明 -->
 <div class="panel">
   <h2>Panel 3｜策略說明</h2>
   <div id="strategyDesc"></div>
 </div>
 
 <script>
-let data=[]
-let logs={}
-let bestParams={}
-let strategyWeights={}
-let optimizationDone=false
+let data=[], logs={}, bestParams={}, strategyWeights={}, optimizationDone=false
 
-// ===== 多策略定義 =====
+// ===== 多策略 =====
 const strategies = {
-  weightedHot: { name:"熱號加權", description:"最近 N 期熱號加權，選前5高權重號碼", params:{N:15}, predict(h,p={N:15}) { return pickTopWeighted(h.slice(-p.N),5) } },
-  hotColdMix: { name:"冷熱混合", description:"最近 hotN 期熱號 + 過去 coldN 期冷號組合", params:{hotN:10,coldN:20}, predict(h,p={hotN:10,coldN:20}) { const hot=pickTopWeighted(h.slice(-p.hotN),3); const cold=pickTopWeighted(h.slice(-p.coldN),2,true); return [...hot,...cold] } },
-  oddEvenBalance: { name:"奇偶平衡", description:"保持奇偶比例約2:3或3:2", params:{N:15}, predict(h,p={N:15}) { const top=pickTopWeighted(h.slice(-p.N),5); let odd=top.filter(n=>n%2===1); let even=top.filter(n=>n%2===0); while(odd.length+even.length<5){odd.length<even.length?odd.push(top[0]):even.push(top[0])} return [...odd,...even].slice(0,5) } },
-  consecutivePattern: { name:"連號模式", description:"偏好連號組合", params:{N:20}, predict(h,p={N:20}) { const freq={}; h.slice(-p.N).forEach(d=>d.numbers.forEach(n=>freq[n]=(freq[n]||0)+1)); const sorted=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).map(Number); let result=[]; for(let i=0;i<sorted.length;i++){ if(sorted.includes(sorted[i]+1)&&result.length<5) result.push(sorted[i],sorted[i]+1)} return [...new Set(result)].slice(0,5) } }
+  weightedHot:{name:"熱號加權",description:"最近 N 期熱號加權，選前5高權重號碼",params:{N:15},predict(h,p={N:15}){return pickTopWeighted(h.slice(-p.N),5)}},
+  hotColdMix:{name:"冷熱混合",description:"最近 hotN 期熱號 + 過去 coldN 期冷號組合",params:{hotN:10,coldN:20},predict(h,p={hotN:10,coldN:20}){const hot=pickTopWeighted(h.slice(-p.hotN),3); const cold=pickTopWeighted(h.slice(-p.coldN),2,true); return [...hot,...cold]}},
+  oddEvenBalance:{name:"奇偶平衡",description:"保持奇偶比例約2:3或3:2",params:{N:15},predict(h,p={N:15}){const top=pickTopWeighted(h.slice(-p.N),5); let odd=top.filter(n=>n%2===1); let even=top.filter(n=>n%2===0); while(odd.length+even.length<5){odd.length<even.length?odd.push(top[0]):even.push(top[0])} return [...odd,...even].slice(0,5)}},
+  consecutivePattern:{name:"連號模式",description:"偏好連號組合",params:{N:20},predict(h,p={N:20}){const freq={}; h.slice(-p.N).forEach(d=>d.numbers.forEach(n=>freq[n]=(freq[n]||0)+1)); const sorted=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).map(Number); let result=[]; for(let i=0;i<sorted.length;i++){if(sorted.includes(sorted[i]+1)&&result.length<5) result.push(sorted[i],sorted[i]+1)} return [...new Set(result)].slice(0,5)}}
 }
 
-// ===== CSV 讀取 =====
+// ===== CSV =====
 document.getElementById("csvInput").addEventListener("change", e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=()=>parseCSV(reader.result); reader.readAsText(file); })
 function parseCSV(text){ const rows=text.trim().split("\n"); data=rows.slice(1).map(r=>{ const [date,...nums]=r.split(","); return {date,numbers:nums.map(n=>parseInt(n,10))} }) }
 
 // ===== 回測 =====
-function runBacktest(){ logs={}; Object.keys(strategies).forEach(k=>{ logs[k]=[]; strategyWeights[k]=1 }); for(let i=3;i<data.length;i++){ const history=data.slice(0,i); const actual=data[i].numbers; const date=data[i].date; for(const key in strategies){ const predicted=strategies[key].predict(history,strategies[key].params); const hit=predicted.filter(n=>actual.includes(n)).length; logs[key].push({date,actual,predicted,hit}) } } populateSelects(); renderLogs(); renderStrategyDesc(); optimizationDone=false; document.getElementById("predictBtn").classList.add("disabled") }
+function runBacktest(){
+  logs={}; Object.keys(strategies).forEach(k=>{logs[k]=[]; strategyWeights[k]=1})
+  for(let i=3;i<data.length;i++){
+    const history=data.slice(0,i), actual=data[i].numbers, date=data[i].date
+    for(const key in strategies){
+      const predicted=strategies[key].predict(history,strategies[key].params)
+      const hit=predicted.filter(n=>actual.includes(n)).length
+      logs[key].push({date,actual,predicted,hit})
+    }
+  }
+  populateSelects(); renderLogs(); renderStrategyDesc(); optimizationDone=false; document.getElementById("predictBtn").classList.add("disabled")
+}
 
 // ===== Panel 2 =====
-function renderLogs(){ const key=document.getElementById("strategySelect").value; const container=document.getElementById("logContainer"); container.innerHTML=""; if(!logs[key]) return; const recentLogs=logs[key].slice(-10).reverse(); let twoStarHits=0; recentLogs.forEach(r=>{ if(r.hit>=2) twoStarHits++; container.innerHTML+=`<div class="log-item"><div>${r.date}</div><div class="small">開獎：${r.actual.join(" ")}</div><div class="small">預測：${r.predicted.join(" ")}</div><div>命中：${r.hit}</div></div>` }); const rate=recentLogs.length?((twoStarHits/recentLogs.length)*100).toFixed(1):0; container.innerHTML+=`<div class="log-item"><strong>近10期2星以上命中率: ${rate}%</strong></div>`; strategyWeights[key]=rate }
+function renderLogs(){ const key=document.getElementById("strategySelect").value; const container=document.getElementById("logContainer"); container.innerHTML=""; if(!logs[key]) return; const recentLogs=logs[key].slice(-10).reverse(); let twoStarHits=0; recentLogs.forEach(r=>{if(r.hit>=2) twoStarHits++; container.innerHTML+=`<div class="log-item"><div>${r.date}</div><div class="small">開獎：${r.actual.join(" ")}</div><div class="small">預測：${r.predicted.join(" ")}</div><div>命中：${r.hit}</div></div>`}); const rate=recentLogs.length?((twoStarHits/recentLogs.length)*100).toFixed(1):0; container.innerHTML+=`<div class="log-item"><strong>近10期2星以上命中率: ${rate}%</strong></div>`; strategyWeights[key]=rate}
 
 // ===== Panel 3 =====
-function renderStrategyDesc(){ const box=document.getElementById("strategyDesc"); box.innerHTML=Object.values(strategies).map(s=>`<div class="log-item"><strong>${s.name}</strong><div class="small">${s.description}</div></div>`).join("") }
+function renderStrategyDesc(){ const box=document.getElementById("strategyDesc"); box.innerHTML=Object.values(strategies).map(s=>`<div class="log-item"><strong>${s.name}</strong><div class="small">${s.description}</div></div>`).join("")}
 
-// ===== Panel 5 =====
-function runLivePrediction(){ if(!optimizationDone){ alert("請先執行策略參數優化"); return } if(data.length===0) return; const votes={}; Object.keys(strategies).forEach(k=>{ const strategy=strategies[k]; const params=bestParams[k]||strategy.params; const nums=strategy.predict(data,params); nums.forEach(n=>votes[n]=(votes[n]||0)+strategyWeights[k]) }); const finalPrediction=Object.keys(votes).sort((a,b)=>votes[b]-votes[a]).slice(0,5).map(Number); document.getElementById("liveResult").innerHTML=`<div class="log-item"><div>策略加權投票預測</div><div class="small">資料範圍：${data[0].date} ～ ${data[data.length-1].date}</div><div>預測號碼：<strong>${finalPrediction.join(" ")}</strong></div><div class="small">各策略最佳參數：${JSON.stringify(bestParams)}</div></div>` }
-
-// ===== Panel 4 優化（低於40%不標色）=====
+// ===== Panel 4 優化（升級，低於40%不標色，不更新參數）=====
 function optimizeParams(){
-  const key=document.getElementById("optStrategySelect").value
-  const selectedKey=key
-  const strategy=strategies[key]
-  const Nvalues=[5,6,7,8,9,10,11,12,13,14,15]
-  let bestRate=0, bestN=0, resultHTML=""
+  const key=document.getElementById("optStrategySelect").value, selectedKey=key
+  const strategy=strategies[key], Nvalues=[5,6,7,8,9,10,11,12,13,14,15]
+  let bestRate=0,bestN=0,resultHTML=""
   Nvalues.forEach(N=>{
-    if(strategy.name==="熱號加權" || strategy.name==="奇偶平衡" || strategy.name==="連號模式") strategy.params.N=N
+    if(strategy.name==="熱號加權"||strategy.name==="奇偶平衡"||strategy.name==="連號模式") strategy.params.N=N
     if(strategy.name==="冷熱混合") strategy.params.hotN=N
-
-    const log=logs[key].slice(-10)
-    const twoStar=log.filter(r=>r.hit>=2).length
+    const log=logs[key].slice(-10), twoStar=log.filter(r=>r.hit>=2).length
     const rate=log.length?((twoStar/log.length)*100).toFixed(1):0
-    if(rate>bestRate && rate>=40) bestRate=rate, bestN=N
-
+    if(rate>=40 && rate>bestRate) bestRate=rate,bestN=N
     const highlight=(rate>=40 && rate==bestRate)?' best':''
     resultHTML+=`<div class="log-item${highlight}">N=${N} → 2星命中率: ${rate}%</div>`
   })
-
-  if(bestRate>=40){
-    if(strategy.name==="熱號加權" || strategy.name==="奇偶平衡" || strategy.name==="連號模式") bestParams[key]={N:bestN}
-    else if(strategy.name==="冷熱混合") bestParams[key]={hotN:bestN}
-  } else { bestParams[key]=strategy.params } // 未達40%則維持原參數
-
+  if(bestRate>=40){ if(strategy.name==="熱號加權"||strategy.name==="奇偶平衡"||strategy.name==="連號模式") bestParams[key]={N:bestN}; else if(strategy.name==="冷熱混合") bestParams[key]={hotN:bestN} }
+  else bestParams[key]=strategy.params
   document.getElementById("optResult").innerHTML=resultHTML
   document.getElementById("optStrategySelect").value=selectedKey
   optimizationDone=true
   document.getElementById("predictBtn").classList.remove("disabled")
 }
 
-// ===== 共用 =====
-function populateSelects(){ const selects=[document.getElementById("strategySelect"),document.getElementById("optStrategySelect")]; selects.forEach(sel=>{ sel.innerHTML=""; for(const k in strategies) sel.innerHTML+=`<option value="${k}">${strategies[k].name}</option>` }) }
+// ===== Panel 5 預測 =====
+function runLivePrediction(){
+  if(!optimizationDone){ alert("請先執行策略參數優化"); return }
+  if(data.length===0) return
+  const votes={}
+  Object.keys(strategies).forEach(k=>{
+    const strategy=strategies[k], params=bestParams[k]||strategy.params
+    const nums=strategy.predict(data,params)
+    nums.forEach(n=>votes[n]=(votes[n]||0)+strategyWeights[k])
+  })
+  const finalPrediction=Object.keys(votes).sort((a,b)=>votes[b]-votes[a]).slice(0,5).map(Number)
+  document.getElementById("liveResult").innerHTML=`<div class="log-item"><div>策略加權投票預測</div><div class="small">資料範圍：${data[0].date} ～ ${data[data.length-1].date}</div><div>預測號碼：<strong>${finalPrediction.join(" ")}</strong></div><div class="small">各策略最佳參數：${JSON.stringify(bestParams)}</div></div>`
+}
 
-// ===== 工具 =====
-function pickTopWeighted(history,count,reverse=false){ const freq={}; history.forEach(d=>d.numbers.forEach(n=>freq[n]=(freq[n]||0)+1)); return Object.keys(freq).sort((a,b)=>reverse?freq[a]-freq[b]:freq[b]-freq[a]).slice(0,count).map(Number) }
+// ===== 共用 & 工具 =====
+function populateSelects(){ const selects=[document.getElementById("strategySelect"),document.getElementById("optStrategySelect")]; selects.forEach(sel=>{sel.innerHTML=""; for(const k in strategies) sel.innerHTML+=`<option value="${k}">${strategies[k].name}</option>`})}
+function pickTopWeighted(history,count,reverse=false){ const freq={}; history.forEach(d=>d.numbers.forEach(n=>freq[n]=(freq[n]||0)+1)); return Object.keys(freq).sort((a,b)=>reverse?freq[a]-freq[b]:freq[b]-freq[a]).slice(0,count).map(Number)}
 </script>
 
 </body>
