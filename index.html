@@ -1,202 +1,219 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>539策略回測 Demo v21</title>
+<title>預測模擬系統</title>
 <style>
-html, body { margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#0B2545; color:#F0F0F0; }
-.container { display:flex; flex-direction:column; align-items:center; padding:10px; min-height:100vh; box-sizing:border-box; }
-h1 { font-size:1.8em; margin:10px 0; text-align:center; }
-.card { background:#142850; border-radius:12px; padding:15px; margin:10px 0; width:90%; max-width:500px; box-shadow:0 4px 8px rgba(0,0,0,0.3); }
-.card h2 { margin:0 0 10px 0; font-size:1.2em; color:#F8F8FF; }
-.card p { margin:5px 0; font-size:1em; line-height:1.4; }
-button, select { background:#1B3B6F; color:#F0F0F0; border:none; border-radius:10px; padding:10px; margin:5px 5px 5px 0; font-size:1em; width:48%; box-sizing:border-box; }
-span.rateDisplay { display:inline-block; width:48%; text-align:center; font-weight:bold; font-size:1em; line-height:2.2em; vertical-align:middle; }
-span.rateHigh { color:#00FFCC; }
-span.rateLow { color:#FF5050; }
-#nextPrediction { margin-top:8px; font-size:1.1em; font-weight:bold; color:#00FFCC; }
-.table-container { width:100%; overflow-x:auto; }
-table { width:100%; border-collapse:collapse; margin-top:10px; }
-th, td { border:1px solid #334A69; padding:8px; text-align:center; }
-th { background:#1B3B6F; }
-td { background:#142850; }
-@media(max-width:400px){ h1{font-size:1.5em;} .card{padding:12px;} button, select{padding:8px;font-size:0.9em;} }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont;
+  background: #0f1a2b;
+  color: #ffffff;
+}
+.panel {
+  padding: 16px;
+  border-bottom: 1px solid #24324a;
+}
+h2 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+button, select, input {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-top: 8px;
+  border-radius: 10px;
+  border: none;
+}
+button {
+  background: #1e3a5f;
+  color: #fff;
+}
+.log-item {
+  background: #16253d;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.small {
+  font-size: 13px;
+  opacity: 0.8;
+}
 </style>
 </head>
+
 <body>
-<div class="container">
-<h1>539策略回測 Demo v21</h1>
 
-<div class="card">
-<h2>上傳歷史 CSV</h2>
-<input type="file" id="csvFile" accept=".csv">
-<p id="csvCount">CSV 筆數：0</p>
-</div>
-
-<div class="card">
-<h2>策略模組</h2>
-<p>L1：高頻號碼 + 最近熱門號碼 + 冷號 + 區間微調 + 最近三期熱號優先</p>
-<p>L2_new2：近期熱門加權 + 冷號補充 + 高頻號碼 + 區間均衡</p>
-<p>L3：區間選號 + 最近熱門號碼 + 高頻號碼 + 冷號微調 + 防止號碼集中</p>
+<!-- Panel 1 -->
+<div class="panel">
+  <h2>Panel 1｜資料與回測</h2>
+  <input type="file" id="csvInput" accept=".csv">
+  <button onclick="runBacktest()">執行回測</button>
 </div>
 
-<div class="card">
-<h2>回測控制</h2>
-<button onclick="runBacktest()">執行回測</button>
-<p id="backtestCount">回測筆數：0</p>
+<!-- Panel 2 -->
+<div class="panel">
+  <h2>Panel 2｜近 10 期回測 Log</h2>
+  <select id="strategySelect" onchange="renderLogs()"></select>
+  <div id="logContainer"></div>
 </div>
 
-<div class="card">
-<h2>下期預測號碼 (基於歷史統計)</h2>
-<select id="strategySelectPrediction" onchange="updateNextPrediction()">
-  <option value="L1">L1</option>
-  <option value="L2_new2">L2_new2</option>
-  <option value="L3">L3</option>
-</select>
-<p id="nextPrediction">預測號碼: --</p>
-<p style="font-size:0.9em;color:#ccc;">提示：下期號碼僅在回測完成後生成，固定生成且與回測 Log 最新期號碼一致</p>
+<!-- Panel 3 -->
+<div class="panel">
+  <h2>Panel 3｜策略說明</h2>
+  <div id="strategyDesc"></div>
 </div>
 
-<div class="card">
-<h2>回測 Log (最近30期，最新在上)</h2>
-<div style="display:flex; align-items:center; margin-bottom:5px;">
-<select id="strategySelect" onchange="updateLog()">
-  <option value="L1">L1</option>
-  <option value="L2_new2">L2_new2</option>
-  <option value="L3">L3</option>
-</select>
-<span class="rateDisplay" id="recent5Rate">近5期命中率: --</span>
-</div>
-<div class="table-container">
-<table>
-<thead>
-<tr>
-<th>日期</th><th>開獎號碼</th><th>預測號碼</th><th>命中數量</th>
-</tr>
-</thead>
-<tbody id="backtestLog"></tbody>
-</table>
-</div>
-</div>
+<!-- Panel 4 -->
+<div class="panel">
+  <h2>Panel 4｜實戰預測（未來）</h2>
+  <select id="liveStrategySelect"></select>
+  <button onclick="runLivePrediction()">產生預測</button>
+  <div id="liveResult"></div>
 </div>
 
 <script>
-let csvData = [];
-let backtestResults = [];
-let fixedPredictions = {};
+let data = []
+let logs = {}
 
-document.getElementById('csvFile').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(event){
-    const text = event.target.result;
-    csvData = text.trim().split('\n').slice(1).map(line=>{
-      const [date,n1,n2,n3,n4,n5] = line.split(',');
-      return {date, numbers:[n1,n2,n3,n4,n5]};
-    });
-    document.getElementById('csvCount').innerText = `CSV 筆數：${csvData.length}`;
-    fixedPredictions={};
-    document.getElementById('nextPrediction').innerText='預測號碼: --';
-  };
-  reader.readAsText(file);
-});
-
-// 計算號碼頻率
-function computeFrequency(data){
-  const freq = Array(40).fill(0);
-  data.forEach(row=>{
-    row.numbers.forEach(n => freq[parseInt(n)]++);
-  });
-  return freq;
-}
-
-// 策略固定生成函數 (加強)
-function generateFixedL1(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let high=sorted.slice(0,10).map(x=>x.n);
-  let recentHot=csvData.slice(-3).flatMap(r=>r.numbers).map(Number);
-  let low=sorted.slice(-10).map(x=>x.n);
-  let nums=[high[0],recentHot[0],low[0],high[1],recentHot[1]];
-  return nums.slice(0,5);
-}
-function generateFixedL2(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let high=sorted.slice(0,10).map(x=>x.n);
-  let low=sorted.slice(-10).map(x=>x.n);
-  let recentHot=csvData.slice(-5).flatMap(r=>r.numbers).map(Number);
-  let nums=[high[0],high[1],low[0],recentHot[0],recentHot[1]];
-  return nums.slice(0,5);
-}
-function generateFixedL3(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let ranges=[[1,13],[14,26],[27,39]]; let nums=[];
-  ranges.forEach(r=>{
-    let pick=sorted.filter(x=>x.n>=r[0]&&x.n<=r[1]).map(x=>x.n);
-    if(pick.length>0) nums.push(pick[0]);
-  });
-  let recentHot=csvData.slice(-5).flatMap(r=>r.numbers).map(Number);
-  nums.push(recentHot[0],recentHot[1]);
-  return nums.slice(0,5);
-}
-
-// 計算命中數
-function hitCount(actual,pred){ return pred.filter(n=>actual.includes(n.toString())).length; }
-
-// 回測（每期使用當期之前歷史資料）
-function runBacktest(){
-  backtestResults=[];
-  for(let i=1;i<csvData.length;i++){
-    const histData = csvData.slice(0,i);
-    const freq = computeFrequency(histData);
-    const row = csvData[i];
-    const l1=generateFixedL1(freq);
-    const l2=generateFixedL2(freq);
-    const l3=generateFixedL3(freq);
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L1',pred:l1,hits:hitCount(row.numbers,l1)});
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L2_new2',pred:l2,hits:hitCount(row.numbers,l2)});
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L3',pred:l3,hits:hitCount(row.numbers,l3)});
+/* ===== 策略定義 ===== */
+const strategies = {
+  hot10: {
+    name: "近10期熱號",
+    description: "統計最近10期出現頻率最高的號碼",
+    predict(history) {
+      return pickByFrequency(history.slice(-10))
+    }
+  },
+  cold: {
+    name: "冷號策略",
+    description: "優先選擇長時間未出現的號碼",
+    predict(history) {
+      return pickByFrequency(history, true)
+    }
   }
-  document.getElementById('backtestCount').innerText=`回測筆數：${backtestResults.length}`;
-  generateNextPrediction();
-  updateLog();
 }
 
-// 生成下期固定預測號碼（回測完成後）
-function generateNextPrediction(){
-  const freq = computeFrequency(csvData);
-  fixedPredictions['L1']=generateFixedL1(freq);
-  fixedPredictions['L2_new2']=generateFixedL2(freq);
-  fixedPredictions['L3']=generateFixedL3(freq);
-  updateNextPrediction();
+/* ===== CSV 讀取 ===== */
+document.getElementById("csvInput").addEventListener("change", e => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = () => parseCSV(reader.result)
+  reader.readAsText(file)
+})
+
+function parseCSV(text) {
+  const rows = text.trim().split("\n")
+  data = rows.slice(1).map(r => {
+    const [date, ...nums] = r.split(",")
+    return {
+      date,
+      numbers: nums.map(n => parseInt(n, 10))
+    }
+  })
 }
 
-// 更新 Log
-function updateLog(){
-  const select=document.getElementById('strategySelect').value;
-  const logBody=document.getElementById('backtestLog');
-  logBody.innerHTML='';
-  const filtered=backtestResults.filter(r=>r.strategy===select).slice(-30).reverse();
-  filtered.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${r.date}</td><td>${r.actual.join(',')}</td><td>${r.pred.join(',')}</td><td>${r.hits}</td>`;
-    logBody.appendChild(tr);
-  });
-  const recent5=backtestResults.filter(r=>r.strategy===select).slice(-5);
-  const twoStarHits=recent5.filter(x=>x.hits>=2).length;
-  const rate=recent5.length>0?(twoStarHits/recent5.length*100).toFixed(1):'--';
-  const rateSpan=document.getElementById('recent5Rate');
-  rateSpan.innerText=`近5期命中率: ${rate}%`;
-  rateSpan.className='rateDisplay '+(rate>=70?'rateHigh':'rateLow');
+/* ===== 回測主流程（鎖死） ===== */
+function runBacktest() {
+  logs = {}
+  Object.keys(strategies).forEach(k => logs[k] = [])
+
+  for (let i = 3; i < data.length; i++) {
+    const history = data.slice(0, i)
+    const actual = data[i].numbers
+    const date = data[i].date
+
+    for (const key in strategies) {
+      const predicted = strategies[key].predict(history)
+      const hit = predicted.filter(n => actual.includes(n)).length
+      logs[key].push({ date, actual, predicted, hit })
+    }
+  }
+
+  populateSelects()
+  renderLogs()
+  renderStrategyDesc()
 }
 
-// 下期預測號碼 Panel
-function updateNextPrediction(){
-  const select=document.getElementById('strategySelectPrediction').value;
-  const pred=fixedPredictions[select]||[];
-  document.getElementById('nextPrediction').innerText=`預測號碼: ${pred.join(',')}`;
+/* ===== Panel 2 ===== */
+function renderLogs() {
+  const key = document.getElementById("strategySelect").value
+  const container = document.getElementById("logContainer")
+  container.innerHTML = ""
+
+  if (!logs[key]) return
+
+  logs[key].slice(-10).reverse().forEach(r => {
+    container.innerHTML += `
+      <div class="log-item">
+        <div>${r.date}</div>
+        <div class="small">開獎：${r.actual.join(" ")}</div>
+        <div class="small">預測：${r.predicted.join(" ")}</div>
+        <div>命中：${r.hit}</div>
+      </div>
+    `
+  })
+}
+
+/* ===== Panel 3 ===== */
+function renderStrategyDesc() {
+  const box = document.getElementById("strategyDesc")
+  box.innerHTML = Object.values(strategies).map(s => `
+    <div class="log-item">
+      <strong>${s.name}</strong>
+      <div class="small">${s.description}</div>
+    </div>
+  `).join("")
+}
+
+/* ===== Panel 4 ===== */
+function runLivePrediction() {
+  if (data.length === 0) return
+
+  const key = document.getElementById("liveStrategySelect").value
+  const strategy = strategies[key]
+  const history = data.slice(0)
+  const predicted = strategy.predict(history)
+
+  document.getElementById("liveResult").innerHTML = `
+    <div class="log-item">
+      <div>策略：${strategy.name}</div>
+      <div class="small">資料：${history[0].date} ～ ${history[history.length - 1].date}</div>
+      <div>預測號碼：<strong>${predicted.join(" ")}</strong></div>
+    </div>
+  `
+}
+
+/* ===== 共用 ===== */
+function populateSelects() {
+  const selects = [
+    document.getElementById("strategySelect"),
+    document.getElementById("liveStrategySelect")
+  ]
+  selects.forEach(sel => {
+    sel.innerHTML = ""
+    for (const k in strategies) {
+      sel.innerHTML += `<option value="${k}">${strategies[k].name}</option>`
+    }
+  })
+}
+
+/* ===== 簡易工具（可替換） ===== */
+function pickByFrequency(history, reverse = false) {
+  const freq = {}
+  history.forEach(d => d.numbers.forEach(n => {
+    freq[n] = (freq[n] || 0) + 1
+  }))
+  return Object.keys(freq)
+    .sort((a,b) => reverse ? freq[a]-freq[b] : freq[b]-freq[a])
+    .slice(0,5)
+    .map(Number)
 }
 </script>
+
 </body>
 </html>
