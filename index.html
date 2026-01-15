@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>必中 v2 - 智能預測系統</title>
 <style>
-/* ===== 原始 CSS 完全未修改 ===== */
 :root {
   --primary: #00ff99;
   --secondary: #274c77;
@@ -19,16 +18,13 @@
   --text-light: #e0f7ff;
 }
 
-/* （中間 CSS 省略，實際請保留你提供的完整內容） */
-/* ===== 原始 CSS 完全未修改 ===== */
+/* ...（保持原有CSS不變）... */
+
 </style>
 </head>
-
 <body>
 
 <div class="container">
-  <!-- ===== 原始內容完全未修改 ===== -->
-
   <!-- Header -->
   <div class="header">
     <h1>必中 v2</h1>
@@ -51,15 +47,19 @@
       <div class="spinner"></div>
       <div>正在分析數據...</div>
     </div>
-    <div id="panelA" style="display: none;"></div>
+    <div id="panelA" style="display: none;">
+      <!-- 分析結果將動態插入 -->
+    </div>
   </div>
 
   <!-- Panel B：組合驗證 -->
   <div class="panel panel-3">
     <h2>✅ 組合驗證層</h2>
-    <input type="text" id="verifyInput" class="text-input">
+    <input type="text" id="verifyInput" class="text-input" placeholder="輸入驗證組合，例如：1 2 16 33 35">
     <button class="btn" onclick="runVerify()">分析組合</button>
-    <div id="panelB" style="display: none;"></div>
+    <div id="panelB" style="display: none;">
+      <!-- 驗證結果將動態插入 -->
+    </div>
   </div>
 
   <!-- Panel C：預測生成 -->
@@ -70,134 +70,51 @@
       <div class="spinner"></div>
       <div>正在生成預測...</div>
     </div>
-    <div id="panelC" style="display: none;"></div>
+    <div id="panelC" style="display: none;">
+      <!-- 預測結果將動態插入 -->
+    </div>
   </div>
 
-  <!-- ================= 新增 Panel D：回測模擬（不影響原邏輯） ================= -->
+  <!-- Panel D：預測邏輯說明 -->
   <div class="panel panel-0">
-    <h2>🧪 回測模擬層</h2>
-    <button class="btn btn-primary" onclick="runBacktest()">執行完整回測</button>
-
-    <div class="loading" id="loadingBacktest">
-      <div class="spinner"></div>
-      <div>正在進行逐期回測...</div>
-    </div>
-
-    <div id="panelBacktest" style="display:none;">
-      <div class="box">
-        <div class="box-title">📊 回測總覽</div>
-        <div id="backtestSummary"></div>
-      </div>
-
-      <div class="box">
-        <div class="box-title">📋 逐期命中紀錄</div>
-        <div style="max-height:300px; overflow:auto;">
-          <table style="width:100%; font-size:0.9rem;">
-            <thead>
-              <tr>
-                <th>期數</th>
-                <th>策略</th>
-                <th>命中數</th>
-              </tr>
-            </thead>
-            <tbody id="backtestTable"></tbody>
-          </table>
-        </div>
-      </div>
+    <h2 id="toggleLogic" style="cursor: pointer;">🧠 預測邏輯說明（點擊展開/收合）</h2>
+    <div id="logicContent" style="display: none;">
+      <p>此系統的預測組合生成基於歷史數據，遵循以下概念：</p>
+      <ul>
+        <li>分析歷史開獎資料，統計每個號碼的出現頻率、遺漏期數、和值及奇偶比。</li>
+        <li>為每個號碼計算綜合評分：中頻號碼、中等遺漏期號碼、奇偶偏好會加分。</li>
+        <li>從高分號碼中挑選 5 個，並套用約束條件：
+          <ul>
+            <li>奇偶平衡：奇數數量接近歷史平均。</li>
+            <li>跨度約束：避免號碼過於集中。</li>
+            <li>和值約束：組合總和接近歷史平均和值。</li>
+          </ul>
+        </li>
+        <li>若規則過嚴，會補齊號碼以保證生成完整組合。</li>
+      </ul>
+      <p>整體策略是一種「模擬歷史常態的啟發式生成」，輸出的組合符合歷史統計特徵，但不保證未來中獎結果。</p>
     </div>
   </div>
-  <!-- ================= 新增 Panel D 結束 ================= -->
 
+  <!-- Footer -->
   <div class="footer">
-    <p>⚠️ 免責聲明：本系統僅供娛樂參考</p>
+    <p>⚠️ 免責聲明：本系統僅供娛樂參考，不具任何預測保證功能</p>
+    <p>彩票開獎為隨機事件，請理性參與，量力而行</p>
   </div>
 </div>
 
 <script>
-/* ===== 原始 JS 邏輯完全未修改 ===== */
-let data = [];
-let analysisCache = null;
+// ...（保持原有JS不變）...
 
-/* （此處保留你原本所有 function：runAnalysis、runVerify、generatePrediction…） */
-
-/* ================= 新增：回測外掛模組（不動原邏輯） ================= */
-
-// 策略包裝（直接呼叫既有 generatePrediction）
-function strategy_original() {
-  return generatePrediction();
-}
-
-// 對照組：純隨機
-function strategy_random() {
-  const s = new Set();
-  while (s.size < 5) s.add(Math.floor(Math.random() * 39) + 1);
-  return Array.from(s).sort((a,b)=>a-b);
-}
-
-const strategies = {
-  "原始策略": strategy_original,
-  "隨機對照": strategy_random
-};
-
-function runBacktest() {
-  if (data.length < 10) {
-    alert("資料不足，無法回測");
-    return;
+// Panel D 點擊收合功能
+document.getElementById('toggleLogic').addEventListener('click', function() {
+  const content = document.getElementById('logicContent');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+  } else {
+    content.style.display = 'none';
   }
-
-  document.getElementById("loadingBacktest").style.display = "block";
-  document.getElementById("panelBacktest").style.display = "none";
-
-  setTimeout(() => {
-    const logs = [];
-    const summary = {};
-
-    Object.keys(strategies).forEach(k => {
-      summary[k] = { total: 0, count: 0 };
-    });
-
-    for (let i = 5; i < data.length; i++) {
-      const actual = data[i].numbers;
-      const slice = data.slice(0, i);
-      const backup = data;
-      data = slice;
-
-      Object.entries(strategies).forEach(([name, fn]) => {
-        const pred = fn();
-        const hit = pred.filter(n => actual.includes(n)).length;
-        logs.push({ issue: i + 1, name, hit });
-        summary[name].total += hit;
-        summary[name].count++;
-      });
-
-      data = backup;
-    }
-
-    renderBacktest(logs, summary);
-
-    document.getElementById("loadingBacktest").style.display = "none";
-    document.getElementById("panelBacktest").style.display = "block";
-  }, 100);
-}
-
-function renderBacktest(logs, summary) {
-  const tbody = document.getElementById("backtestTable");
-  tbody.innerHTML = "";
-
-  logs.forEach(l => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${l.issue}</td><td>${l.name}</td><td>${l.hit}</td>`;
-    tbody.appendChild(tr);
-  });
-
-  const box = document.getElementById("backtestSummary");
-  box.innerHTML = "";
-  Object.entries(summary).forEach(([k,v]) => {
-    box.innerHTML += `<p><strong>${k}</strong>｜平均命中 ${(v.total/v.count).toFixed(2)}</p>`;
-  });
-}
-/* ================= 新增結束 ================= */
+});
 </script>
-
 </body>
 </html>
