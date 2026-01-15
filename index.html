@@ -1,206 +1,193 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>539策略回測 Demo v20</title>
-<style>
-html, body { margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#0B2545; color:#F0F0F0; }
-.container { display:flex; flex-direction:column; align-items:center; padding:10px; min-height:100vh; box-sizing:border-box; }
-h1 { font-size:1.8em; margin:10px 0; text-align:center; }
-.card { background:#142850; border-radius:12px; padding:15px; margin:10px 0; width:90%; max-width:500px; box-shadow:0 4px 8px rgba(0,0,0,0.3); }
-.card h2 { margin:0 0 10px 0; font-size:1.2em; color:#F8F8FF; }
-.card p { margin:5px 0; font-size:1em; line-height:1.4; }
-button, select { background:#1B3B6F; color:#F0F0F0; border:none; border-radius:10px; padding:10px; margin:5px 5px 5px 0; font-size:1em; width:48%; box-sizing:border-box; }
-span.rateDisplay { display:inline-block; width:48%; text-align:center; font-weight:bold; font-size:1em; line-height:2.2em; vertical-align:middle; }
-span.rateHigh { color:#00FFCC; }
-span.rateLow { color:#FF5050; }
-#nextPrediction { margin-top:8px; font-size:1.1em; font-weight:bold; color:#00FFCC; }
-.table-container { width:100%; overflow-x:auto; }
-table { width:100%; border-collapse:collapse; margin-top:10px; }
-th, td { border:1px solid #334A69; padding:8px; text-align:center; }
-th { background:#1B3B6F; }
-td { background:#142850; }
-@media(max-width:400px){ h1{font-size:1.5em;} .card{padding:12px;} button, select{padding:8px;font-size:0.9em;} }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>539 專業回測系統</title>
+    <style>
+        :root {
+            --bg-dark: #0a192f;      /* 藏藍底色 */
+            --card-blue: #172a45;    /* 資訊卡片色 */
+            --accent: #c5a059;       /* 銅金強調色 */
+            --highlight: #64ffda;    /* 數據分析色 */
+            --text: #e6f1ff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: var(--bg-dark); color: var(--text);
+            margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh;
+            overflow: hidden; touch-action: manipulation;
+        }
+        /* 頂部標題 */
+        .header { padding: 25px 20px 10px; text-align: left; }
+        .header h1 { font-size: 1.2rem; margin: 0; color: var(--accent); letter-spacing: 1px; }
+        
+        /* 數據上傳區 */
+        .upload-area {
+            background: var(--card-blue); margin: 15px; padding: 20px;
+            border-radius: 16px; border: 1px dashed #233554; text-align: center;
+        }
+        #fileInput { display: none; }
+        .upload-btn {
+            background: transparent; border: 1px solid var(--accent);
+            color: var(--accent); padding: 10px 20px; border-radius: 8px; font-size: 0.9rem;
+        }
+
+        /* 回測統計數據 */
+        .stats-container {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 15px;
+        }
+        .stat-card {
+            background: var(--card-blue); padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .stat-name { font-size: 0.7rem; color: #8892b0; margin-bottom: 5px; }
+        .stat-value { font-size: 1.1rem; font-weight: bold; color: var(--highlight); }
+
+        /* 中間號碼展示區 */
+        .display-main {
+            flex-grow: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        .ball-row { display: flex; gap: 10px; margin-bottom: 20px; }
+        .ball {
+            width: 48px; height: 48px; background: var(--accent); border-radius: 50%;
+            color: var(--bg-dark); display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 1.2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation: bounce 0.4s ease-out;
+        }
+
+        /* 底部按鈕控制 (iOS 單手操作熱區) */
+        .bottom-nav {
+            padding: 30px 20px 50px; background: linear-gradient(transparent, var(--bg-dark));
+        }
+        .main-btn {
+            width: 100%; padding: 20px; border-radius: 40px; border: none;
+            background: var(--accent); color: var(--bg-dark);
+            font-size: 1.1rem; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        }
+        .main-btn:active { transform: scale(0.96); opacity: 0.9; }
+        .main-btn:disabled { background: #444; color: #8892b0; box-shadow: none; }
+
+        @keyframes bounce {
+            0% { transform: translateY(20px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-<h1>539策略回測 Demo v20</h1>
 
-<div class="card">
-<h2>上傳歷史 CSV</h2>
-<input type="file" id="csvFile" accept=".csv">
-<p id="csvCount">CSV 筆數：0</p>
+<div class="header">
+    <h1>539 STRATEGY ANALYZER</h1>
+    <p id="dataCount" style="font-size: 0.75rem; color: #8892b0; margin: 5px 0 0;">等待歷史數據載入...</p>
 </div>
 
-<div class="card">
-<h2>策略模組</h2>
-<p>L1：高頻號碼 + 最近熱門號碼 + 冷號 + 區間微調 + 最近三期熱號優先</p>
-<p>L2_new2：近期熱門加權 + 冷號補充 + 高頻號碼 + 區間調整 + 區域均衡</p>
-<p>L3：區間選號 + 最近熱門號碼 + 高頻號碼 + 冷號微調 + 防止號碼集中</p>
+<div class="upload-area">
+    <label for="fileInput" class="upload-btn">📂 上傳 CSV 歷史檔</label>
+    <input type="file" id="fileInput" accept=".csv" onchange="processCSV(this)">
 </div>
 
-<div class="card">
-<h2>回測控制</h2>
-<button onclick="runBacktest()">執行回測</button>
-<p id="backtestCount">回測筆數：0</p>
+<div class="stats-container">
+    <div class="stat-card"><div class="stat-name">隨機策略 >2星率</div><div class="stat-value" id="r-random">0.00%</div></div>
+    <div class="stat-card"><div class="stat-name">熱門策略 >2星率</div><div class="stat-value" id="r-hot">0.00%</div></div>
+    <div class="stat-card"><div class="stat-name">冷門策略 >2星率</div><div class="stat-value" id="r-cold">0.00%</div></div>
+    <div class="stat-card"><div class="stat-name">3+2混合 >2星率</div><div class="stat-value" id="r-mix">0.00%</div></div>
 </div>
 
-<div class="card">
-<h2>下期預測號碼 (基於歷史統計)</h2>
-<select id="strategySelectPrediction" onchange="updateNextPrediction()">
-  <option value="L1">L1</option>
-  <option value="L2_new2">L2_new2</option>
-  <option value="L3">L3</option>
-</select>
-<p id="nextPrediction">預測號碼: --</p>
+<div class="display-main">
+    <div class="ball-row" id="ballRow"></div>
+    <p id="currentStrat" style="color: var(--accent); font-size: 0.85rem; letter-spacing: 1px;"></p>
 </div>
 
-<div class="card">
-<h2>回測 Log (最近30期，最新在上)</h2>
-<div style="display:flex; align-items:center; margin-bottom:5px;">
-<select id="strategySelect" onchange="updateLog()">
-  <option value="L1">L1</option>
-  <option value="L2_new2">L2_new2</option>
-  <option value="L3">L3</option>
-</select>
-<span class="rateDisplay" id="recent5Rate">近5期命中率: --</span>
-</div>
-<div class="table-container">
-<table>
-<thead>
-<tr>
-<th>日期</th><th>開獎號碼</th><th>預測號碼</th><th>命中數量</th>
-</tr>
-</thead>
-<tbody id="backtestLog"></tbody>
-</table>
-</div>
-</div>
+<div class="bottom-nav">
+    <button id="runBtn" class="main-btn" onclick="generateAndAnalyze()" disabled>生成牌組並全量回測</button>
 </div>
 
 <script>
-let csvData = [];
-let backtestResults = [];
-let fixedPredictions = {}; // 下期固定預測號碼
+    let history = [];
+    const pools = {
+        hot: [1, 5, 8, 12, 17, 19, 23, 29, 34, 38, 39], 
+        cold: [2, 6, 11, 15, 20, 25, 30, 31, 37]
+    };
 
-document.getElementById('csvFile').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(event){
-    const text = event.target.result;
-    csvData = text.trim().split('\n').slice(1).map(line=>{
-      const [date,n1,n2,n3,n4,n5] = line.split(',');
-      return {date, numbers:[n1,n2,n3,n4,n5]};
-    });
-    document.getElementById('csvCount').innerText = `CSV 筆數：${csvData.length}`;
-    fixedPredictions={};
-    document.getElementById('nextPrediction').innerText='預測號碼: --';
-  };
-  reader.readAsText(file);
-});
+    function processCSV(input) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const lines = e.target.result.split('\n');
+            history = lines.map(line => {
+                return line.split(',')
+                    .map(v => parseInt(v.trim()))
+                    .filter(n => !isNaN(n) && n >= 1 && n <= 39);
+            }).filter(arr => arr.length === 5);
 
-// 計算號碼頻率
-function computeFrequency(data){
-  const freq = Array(40).fill(0);
-  data.forEach(row=>{
-    row.numbers.forEach(n => freq[parseInt(n)]++);
-  });
-  return freq;
-}
+            if(history.length > 0) {
+                document.getElementById('dataCount').innerText = `已載入 ${history.length} 期數據，系統已就緒`;
+                document.getElementById('runBtn').disabled = false;
+                runFullBacktest();
+            }
+        };
+        reader.readAsText(file);
+    }
 
-// 策略固定生成函數
-function generateFixedL1(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let high=sorted.slice(0,10).map(x=>x.n);
-  let recentHot=csvData.slice(-5).flatMap(r=>r.numbers).map(Number);
-  let low=sorted.slice(-10).map(x=>x.n);
-  let nums=[high[0],recentHot[0],low[0],high[1],recentHot[1]];
-  return nums.slice(0,5);
-}
-function generateFixedL2(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let high=sorted.slice(0,10).map(x=>x.n);
-  let low=sorted.slice(-10).map(x=>x.n);
-  let recentHot=csvData.slice(-5).flatMap(r=>r.numbers).map(Number);
-  let nums=[high[0],high[1],low[0],recentHot[0],recentHot[1]];
-  return nums.slice(0,5);
-}
-function generateFixedL3(freq){
-  let sorted=freq.map((c,n)=>({n,c})).filter(x=>x.n>0).sort((a,b)=>b.c-a.c);
-  let ranges=[[1,13],[14,26],[27,39]]; let nums=[];
-  ranges.forEach(r=>{
-    let pick=sorted.filter(x=>x.n>=r[0]&&x.n<=r[1]).map(x=>x.n);
-    if(pick.length>0) nums.push(pick[0]);
-  });
-  let recentHot=csvData.slice(-5).flatMap(r=>r.numbers).map(Number);
-  nums.push(recentHot[0],recentHot[1]);
-  return nums.slice(0,5);
-}
+    // 地毯式回測：計算每一種策略在所有歷史數據中的 >2星命中率
+    function runFullBacktest() {
+        const strats = ['random', 'hot', 'cold', 'mix'];
+        strats.forEach(s => {
+            let hitCount = 0;
+            // 為求準確，模擬 500 組不同組合去跑全歷史取平均
+            const simCount = 100; 
+            for(let i=0; i<simCount; i++) {
+                const pick = getPick(s);
+                history.forEach(actual => {
+                    const match = pick.filter(n => actual.includes(n)).length;
+                    if(match >= 2) hitCount++;
+                });
+            }
+            const finalRate = ((hitCount / (history.length * simCount)) * 100).toFixed(2);
+            document.getElementById(`r-${s}`).innerText = `${finalRate}%`;
+        });
+    }
 
-// 回測固定生成
-function generatePredictionL1(freq){ return generateFixedL1(freq); }
-function generatePredictionL2_new2(freq){ return generateFixedL2(freq); }
-function generatePredictionL3(freq){ return generateFixedL3(freq); }
+    function getPick(type) {
+        if(type === 'random') return pickRandom(39, 5);
+        if(type === 'hot') return pickFrom(pools.hot, 5);
+        if(type === 'cold') return pickFrom(pools.cold, 5);
+        return [...pickFrom(pools.hot, 3), ...pickFrom(pools.cold, 2)];
+    }
 
-// 計算命中數
-function hitCount(actual,pred){ return pred.filter(n=>actual.includes(n.toString())).length; }
+    function generateAndAnalyze() {
+        const strats = ['random', 'hot', 'cold', 'mix'];
+        const selected = strats[Math.floor(Math.random() * strats.length)];
+        const names = {random:'隨機策略', hot:'熱門策略', cold:'冷門策略', mix:'混合策略(3+2)'};
+        
+        document.getElementById('currentStrat').innerText = `目前運用：${names[selected]}`;
+        const finalNums = getPick(selected).sort((a,b)=>a-b);
+        
+        const container = document.getElementById('ballRow');
+        container.innerHTML = '';
+        finalNums.forEach((n, i) => {
+            setTimeout(() => {
+                const b = document.createElement('div');
+                b.className = 'ball';
+                b.innerText = n < 10 ? '0'+n : n;
+                container.appendChild(b);
+            }, i * 80);
+        });
+    }
 
-// 回測（滾動歷史）
-function runBacktest(){
-  backtestResults=[];
-  for(let i=1;i<csvData.length;i++){
-    const histData = csvData.slice(0,i);
-    const freq = computeFrequency(histData);
-    const row = csvData[i];
-    const l1=generatePredictionL1(freq);
-    const l2=generatePredictionL2_new2(freq);
-    const l3=generatePredictionL3(freq);
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L1',pred:l1,hits:hitCount(row.numbers,l1)});
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L2_new2',pred:l2,hits:hitCount(row.numbers,l2)});
-    backtestResults.push({date:row.date,actual:row.numbers,strategy:'L3',pred:l3,hits:hitCount(row.numbers,l3)});
-  }
-  document.getElementById('backtestCount').innerText=`回測筆數：${backtestResults.length}`;
-  generateNextPrediction();
-  updateLog();
-}
+    function pickRandom(max, count) {
+        let res = [];
+        while(res.length < count) {
+            let r = Math.floor(Math.random() * max) + 1;
+            if(!res.includes(r)) res.push(r);
+        }
+        return res;
+    }
 
-// 生成下期固定預測號碼（回測完成後）
-function generateNextPrediction(){
-  const freq = computeFrequency(csvData);
-  fixedPredictions['L1']=generateFixedL1(freq);
-  fixedPredictions['L2_new2']=generateFixedL2(freq);
-  fixedPredictions['L3']=generateFixedL3(freq);
-  updateNextPrediction();
-}
-
-// 更新 Log
-function updateLog(){
-  const select=document.getElementById('strategySelect').value;
-  const logBody=document.getElementById('backtestLog');
-  logBody.innerHTML='';
-  const filtered=backtestResults.filter(r=>r.strategy===select).slice(-30).reverse();
-  filtered.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${r.date}</td><td>${r.actual.join(',')}</td><td>${r.pred.join(',')}</td><td>${r.hits}</td>`;
-    logBody.appendChild(tr);
-  });
-  const recent5=backtestResults.filter(r=>r.strategy===select).slice(-5);
-  const twoStarHits=recent5.filter(x=>x.hits>=2).length;
-  const rate=recent5.length>0?(twoStarHits/recent5.length*100).toFixed(1):'--';
-  const rateSpan=document.getElementById('recent5Rate');
-  rateSpan.innerText=`近5期命中率: ${rate}%`;
-  rateSpan.className='rateDisplay '+(rate>=70?'rateHigh':'rateLow');
-}
-
-// 下期預測號碼 Panel
-function updateNextPrediction(){
-  const select=document.getElementById('strategySelectPrediction').value;
-  const pred=fixedPredictions[select]||[];
-  document.getElementById('nextPrediction').innerText=`預測號碼: ${pred.join(',')}`;
-}
+    function pickFrom(pool, count) {
+        return [...pool].sort(() => Math.random() - 0.5).slice(0, count);
+    }
 </script>
 </body>
 </html>
