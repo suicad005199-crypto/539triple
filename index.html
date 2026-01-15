@@ -5,151 +5,141 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>必中 v1</title>
 <style>
-body{margin:0;font-family:-apple-system;background:#0f1a2b;color:#fff}
-h1{text-align:center;color:#00ff99;margin:10px 0}
-.panel{padding:14px;border-bottom:1px solid #24324a}
-button,input{width:100%;padding:12px;border-radius:10px;border:none}
-button{background:#1e3a5f;color:#fff}
-.log{background:#16253d;border-radius:10px;padding:10px;margin-bottom:10px}
+body{margin:0;font-family:-apple-system;background:#0b1626;color:#fff}
+h1{text-align:center;color:#00ff99;margin:12px 0}
+.panel{margin:12px;padding:14px;border-radius:14px}
+.p0{background:#050b15}
+.p1{background:#0f1f38}
+.p2{background:#142b4d}
+.p3{background:#1a355c}
+.p4{background:#203f6e}
+h2{font-size:17px;margin-bottom:8px}
+button,input{width:100%;padding:10px;border-radius:10px;border:none;margin-top:6px}
+button{background:#274c77;color:#fff}
+.box{background:#0c1a30;border-radius:10px;padding:8px;margin-top:6px}
 .small{font-size:13px;opacity:.9}
+.ok{color:#00ff99}
+.bad{color:#ff6666}
 </style>
 </head>
 <body>
 
-<h1>必中 v1</h1>
+<!-- Panel 0 -->
+<div class="panel p0">
+  <h1>必中 v1</h1>
+</div>
 
-<div class="panel">
+<!-- Panel 1 -->
+<div class="panel p1">
+  <h2>Panel 1｜資料層（CSV）</h2>
   <input type="file" id="csvInput" accept=".csv">
-  <button onclick="runBacktest()">執行回測</button>
+  <div id="csvInfo" class="small"></div>
 </div>
 
-<div class="panel">
-  <h3>近10期回測 Log</h3>
-  <div id="logPanel"></div>
+<!-- Panel A -->
+<div class="panel p2">
+  <h2>Panel A｜兩階段策略（研究）</h2>
+  <button onclick="runStageA()">執行</button>
+  <div id="panelA"></div>
 </div>
 
-<div class="panel">
-  <h3>下一期預測</h3>
-  <button onclick="predictNext()">產生預測</button>
-  <div id="predictPanel"></div>
+<!-- Panel B -->
+<div class="panel p3">
+  <h2>Panel B｜反向驗證（指定組合）</h2>
+  <input id="verifyInput" placeholder="例：1 2 16 33 35">
+  <button onclick="runVerify()">分析</button>
+  <div id="panelB"></div>
+</div>
+
+<!-- Panel C -->
+<div class="panel p4">
+  <h2>Panel C｜實戰預測（折衷）</h2>
+  <button onclick="runStageC()">產生預測</button>
+  <div id="panelC"></div>
 </div>
 
 <script>
-let data=[], logs=[]
+let data=[]
 
 document.getElementById("csvInput").addEventListener("change",e=>{
   const r=new FileReader()
-  r.onload=()=>data=r.result.trim().split(/\r?\n/).slice(1).map(l=>{
-    const c=l.split(",")
-    return {date:c[0],numbers:c.slice(1).map(Number)}
-  })
+  r.onload=()=>{
+    data=r.result.trim().split(/\r?\n/).slice(1).map(l=>{
+      const c=l.split(",")
+      return{date:c[0],numbers:c.slice(1).map(Number)}
+    })
+    document.getElementById("csvInfo").innerText=
+      `共 ${data.length} 期，範圍 ${data[0].date} ～ ${data.at(-1).date}`
+  }
   r.readAsText(e.target.files[0])
 })
 
-/* ===== 策略定義 ===== */
-const strategies={
-  hot:{name:"熱號",predict:h=>rankByFreq(h,false)},
-  cold:{name:"冷號",predict:h=>rankByFreq(h,true)},
-  structural:{name:"結構平衡 × 延遲共現",predict:h=>structuralBalanced(h)}
+/* ===== 共用計算 ===== */
+function stats(){
+  const freq={}, last={}
+  data.forEach((d,i)=>d.numbers.forEach(n=>{
+    freq[n]=(freq[n]||0)+1
+    last[n]=i
+  }))
+  return{freq,last,T:data.length}
 }
 
-/* ===== 回測 ===== */
-function runBacktest(){
-  logs=[]
-  for(let i=10;i<data.length;i++){
-    const hist=data.slice(0,i), act=data[i]
-    const row={date:act.date,actual:act.numbers,strategies:{}}
-    for(const k in strategies){
-      const p=strategies[k].predict(hist).slice(0,5)
-      row.strategies[k]={nums:p,hit:p.filter(n=>act.numbers.includes(n)).length}
-    }
-    logs.push(row)
-  }
-  renderLogs()
-}
-
-function renderLogs(){
-  const el=document.getElementById("logPanel")
-  el.innerHTML=""
-  logs.slice(-10).forEach(l=>{
-    let h=`<div class="log">
-      <div>${l.date}</div>
-      <div class="small">開獎：${l.actual.join(" ")}</div>`
-    for(const k in l.strategies){
-      const s=l.strategies[k]
-      h+=`<div class="small">${strategies[k].name}：${s.nums.join(" ")}（命中 ${s.hit}）</div>`
-    }
-    h+=`</div>`
-    el.innerHTML+=h
+/* ===== Panel A ===== */
+function runStageA(){
+  const {freq,last,T}=stats()
+  const pool=Object.keys(freq).map(Number).filter(n=>{
+    const f=freq[n]/T
+    const d=T-last[n]
+    return f>0.03 && f<0.15 && d>5 && d<30
   })
+  const combos=[]
+  for(let i=0;i<pool.length;i++)
+   for(let j=i+1;j<pool.length;j++)
+    for(let k=j+1;k<pool.length;k++)
+     for(let l=k+1;l<pool.length;l++)
+      for(let m=l+1;m<pool.length;m++){
+        const c=[pool[i],pool[j],pool[k],pool[l],pool[m]]
+        if(Math.max(...c)-Math.min(...c)>=20) combos.push(c)
+      }
+  document.getElementById("panelA").innerHTML=
+    `<div class="box small">號碼池：${pool.join(" ")}</div>
+     <div class="box small">可行組合數：${combos.length}</div>`
 }
 
-/* ===== 下一期預測 ===== */
-function predictNext(){
-  const el=document.getElementById("predictPanel")
-  el.innerHTML=""
-  for(const k in strategies){
-    const p=strategies[k].predict(data).slice(0,5)
-    el.innerHTML+=`<div class="small">${strategies[k].name}：${p.join(" ")}</div>`
-  }
-}
-
-/* ===== 基礎工具 ===== */
-function rankByFreq(h,rev){
-  const f={}
-  h.forEach(d=>d.numbers.forEach(n=>f[n]=(f[n]||0)+1))
-  return Object.keys(f).sort((a,b)=>rev?f[a]-f[b]:f[b]-f[a]).map(Number)
-}
-function z(v,obj){
-  const arr=Object.values(obj)
-  const m=arr.reduce((a,b)=>a+b,0)/arr.length
-  const s=Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length)||1
-  return (v-m)/s
-}
-
-/* ===== 新增策略：結構平衡 × 延遲共現 ===== */
-function structuralBalanced(h){
-  const freq={}, lastSeen={}, co={}
-  const T=h.length
-
-  h.forEach((d,i)=>{
-    d.numbers.forEach(n=>{
-      freq[n]=(freq[n]||0)+1
-      lastSeen[n]=i
-    })
+/* ===== Panel B ===== */
+function runVerify(){
+  const input=document.getElementById("verifyInput").value
+  const nums=input.split(/\s+/).map(Number)
+  const {freq,last,T}=stats()
+  let html=""
+  nums.forEach(n=>{
+    const f=(freq[n]||0)/T
+    const d=T-(last[n]??0)
+    html+=`<div class="small">${n}｜
+      穩定 ${f.toFixed(3)}｜
+      延遲 ${d}
+    </div>`
   })
+  const span=Math.max(...nums)-Math.min(...nums)
+  html+=`<div class="small ${span>=20?"ok":"bad"}">跨度 ${span}</div>`
+  document.getElementById("panelB").innerHTML=`<div class="box">${html}</div>`
+}
 
-  Object.keys(freq).forEach(n=>co[n]=0)
-  h.forEach(d=>{
-    d.numbers.forEach(a=>{
-      d.numbers.forEach(b=>{
-        if(a!==b) co[a]+=1
-      })
-    })
-  })
-
-  const stability={}, delay={}
-  Object.keys(freq).forEach(n=>{
-    stability[n]=freq[n]/T
-    delay[n]=T-(lastSeen[n]??0)
-  })
-
-  const score=n=>
-      0.40*z(stability[n],stability)
-    + 0.30*z(delay[n],delay)
-    + 0.30*z(co[n],co)
-
-  const ranked=Object.keys(freq).sort((a,b)=>score(b)-score(a)).map(Number)
-
-  /* 結構約束選號 */
-  const selected=[]
+/* ===== Panel C ===== */
+function runStageC(){
+  const {freq,last,T}=stats()
+  const ranked=Object.keys(freq).sort((a,b)=>{
+    return (freq[b]/T)-(freq[a]/T)+(last[a]-last[b])*0.001
+  }).map(Number)
+  const pick=[]
   for(const n of ranked){
-    if(selected.length===0 || Math.max(...selected,n)-Math.min(...selected,n)>=10){
-      selected.push(n)
+    if(pick.length===0||Math.max(...pick,n)-Math.min(...pick,n)>=15){
+      pick.push(n)
     }
-    if(selected.length===5) break
+    if(pick.length===5)break
   }
-  return selected
+  document.getElementById("panelC").innerHTML=
+    `<div class="box small">預測號碼：${pick.join(" ")}</div>`
 }
 </script>
 </body>
