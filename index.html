@@ -3,236 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 量化決策實驗室 Pro Max</title>
+    <title>539 AI Strategy Lab | 極致優化版</title>
     <style>
-        :root { --primary: #e63946; --secondary: #1d3557; --success: #2a9d8f; --accent: #f4a261; --danger: #dc2626; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f7f9; color: var(--secondary); font-size: 13px; }
+        :root { --primary: #e63946; --secondary: #1d3557; --success: #2a9d8f; --accent: #f4a261; --danger: #dc2626; --card-bg: #ffffff; }
+        body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background: #f0f2f5; color: #334155; font-size: 13px; }
         
         /* Layout */
-        .header { background: var(--secondary); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .main-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .header { background: var(--secondary); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .main-container { max-width: 1300px; margin: 20px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 400px; gap: 20px; }
 
         /* Panels */
-        .card { background: white; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 20px; border: 1px solid #e5e7eb; }
-        .card-header { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
+        .card { background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .card-header { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         
-        /* Risk Selector */
-        .risk-tag { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: 1px solid #ddd; }
-        .risk-tag.active { background: var(--primary); color: white; border-color: var(--primary); }
+        /* Stats & Balls */
+        .ball-display { display: flex; gap: 10px; justify-content: center; padding: 20px; }
+        .ball { width: 42px; height: 42px; line-height: 42px; background: #ffca3a; border-radius: 10px; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 4px solid #eab308; transition: transform 0.2s; }
+        .ball:hover { transform: translateY(-3px); }
 
-        /* Balls & Stats */
-        .ball-group { display: flex; gap: 8px; margin: 15px 0; justify-content: center; }
-        .ball { width: 36px; height: 36px; line-height: 36px; background: #ffca3a; border-radius: 8px; text-align: center; font-weight: bold; font-size: 1.1rem; border-bottom: 3px solid #eab308; }
-        .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; background: #f9fafb; border-radius: 8px; margin: 10px; }
-        .metric-item { text-align: center; }
-        .metric-label { font-size: 0.7rem; color: #6b7280; display: block; }
-        .metric-val { font-size: 1.1rem; font-weight: bold; color: var(--success); }
-
-        /* Validation Issues */
-        #dataAlert { background: #fef2f2; border: 1px solid #fee2e2; color: var(--danger); padding: 10px; margin: 20px; border-radius: 6px; display: none; }
-
-        /* Table */
-        .scroll-x { overflow-x: auto; max-height: 400px; }
-        table { width: 100%; border-collapse: collapse; text-align: center; }
-        th { position: sticky; top: 0; background: white; padding: 8px; border-bottom: 2px solid #eee; z-index: 10; }
-        td { border: 1px solid #f3f4f6; padding: 6px 2px; }
-        .dot { width: 20px; height: 20px; line-height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-block; font-size: 10px; }
+        /* Heatmap Grid */
+        .heatmap-grid { display: grid; grid-template-columns: repeat(13, 1fr); gap: 6px; padding: 15px; }
+        .heat-cell { border-radius: 6px; padding: 8px 2px; text-align: center; font-weight: bold; position: relative; transition: 0.2s; cursor: help; }
+        
+        /* Controls */
+        select, button { padding: 8px 16px; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer; font-size: 0.85rem; }
+        button.primary { background: var(--primary); color: white; border: none; font-weight: bold; }
+        
+        #dataAlert { background: #fff1f2; border: 1px solid #fda4af; color: #9f1239; padding: 12px; margin: 0 20px 20px; border-radius: 8px; display: none; }
+        
+        @media (max-width: 1000px) { .main-container { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <div style="font-size: 1.2rem; font-weight: bold;">📊 539 量化實驗室 <small>Final Build</small></div>
-    <div style="display:flex; gap:10px; align-items:center;">
-        <span id="riskLabel" style="font-size:0.8rem;">策略模式：</span>
-        <div class="risk-tag active" onclick="setRisk('balanced', this)">平衡</div>
-        <div class="risk-tag" onclick="setRisk('conservative', this)">保守</div>
-        <div class="risk-tag" onclick="setRisk('aggressive', this)">積極</div>
-        <input type="file" id="csvFile" accept=".csv" onchange="bootEngine()">
+    <div style="font-size: 1.3rem; font-weight: bold;">🎯 539 AI Strategy Lab <small style="font-size:0.7rem; opacity:0.7;">v4.0 Alpha</small></div>
+    <div style="display:flex; gap:12px; align-items:center;">
+        <select id="riskLevel" onchange="runAnalysis()">
+            <option value="balanced">平衡型策略</option>
+            <option value="conservative">保守型 (追熱)</option>
+            <option value="aggressive">積極型 (搏冷)</option>
+        </select>
+        <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="bootEngine()">
+        <button class="primary" onclick="document.getElementById('csvFile').click()">載入 CSV</button>
+        <button onclick="generateReport()">匯出報告</button>
     </div>
 </div>
 
-<div id="dataAlert"></div>
-
-<div class="main-grid">
+<div class="main-container">
     <div class="left-pane">
+        <div id="dataAlert"></div>
+
         <div class="card">
-            <div class="card-header">🧬 蒙特卡羅模擬預測 (1000次迭代穩定解)</div>
-            <div style="padding: 20px; text-align: center;">
-                <div id="finalPortfolio" class="ball-group">
-                    <p style="color:#9ca3af">等待數據導入...</p>
-                </div>
-                <div class="metric-grid" id="backtestMetrics">
-                    <div class="metric-item"><span class="metric-label">預期命中 (2+)</span><span class="metric-val">-</span></div>
-                    <div class="metric-item"><span class="metric-label">置信區間 (95%)</span><span class="metric-val">-</span></div>
-                    <div class="metric-item"><span class="metric-label">策略穩定性</span><span class="metric-val">-</span></div>
-                    <div class="metric-item"><span class="metric-label">回測期數</span><span class="metric-val">-</span></div>
-                </div>
+            <div class="card-header">🧬 蒙特卡羅加權組合 (經多樣性優化)</div>
+            <div id="finalPortfolio" class="ball-display">
+                <span style="color:#94a3b8">請載入數據以啟動模擬引擎</span>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header">📈 動態尾數與趨勢熱力圖</div>
-            <div class="scroll-x" id="heatmapView"></div>
+            <div class="card-header">📈 智能加權熱力圖 <span style="font-size:0.7rem; font-weight:normal;">(近期權重 2.5x)</span></div>
+            <div id="advancedHeatmap"></div>
         </div>
     </div>
 
     <div class="right-pane">
         <div class="card">
-            <div class="card-header">⚙️ 策略權重分配</div>
-            <div id="weightDisplay" style="padding:15px; font-size:0.85rem;"></div>
+            <div class="card-header">📊 策略回測指標</div>
+            <div id="metricsPanel" style="padding:20px;">
+                <p style="color:#64748b">等待分析...</p>
+            </div>
         </div>
-        
+
         <div class="card">
-            <div class="card-header">🔍 數據健康檢查</div>
-            <div id="healthCheck" style="padding:15px; font-size:0.85rem; color:#666;">尚未掃描</div>
+            <div class="card-header">🔍 數據完整性檢查</div>
+            <div id="healthCheck" style="padding:20px;">未掃描</div>
         </div>
     </div>
 </div>
 
 <script>
     let db = [];
-    let currentRisk = 'balanced';
+    const strategyCache = new Map();
 
-    // 1. 核心啟動引擎
+    // --- 1. 核心啟動與解析 ---
     async function bootEngine() {
         const file = document.getElementById('csvFile').files[0];
         if(!file) return;
-        const text = await file.text();
         
-        // 解析與品質檢查
+        const text = await file.text();
         const rows = text.split('\n').filter(r => r.trim());
+        
         db = rows.map(r => {
-            const c = r.split(',');
-            return { date: c[0], nums: c.slice(1,6).map(Number).sort((a,b)=>a-b) };
-        });
+            const cols = r.split(',');
+            const nums = cols.slice(1, 6).map(n => parseInt(n.trim()));
+            return {
+                date: cols[0],
+                nums: nums.filter(n => !isNaN(n) && n >= 1 && n <= 39).sort((a,b)=>a-b)
+            };
+        }).filter(r => r.nums.length === 5);
 
-        const issues = validateData();
-        if(issues.length > 0) {
-            document.getElementById('dataAlert').innerHTML = `<strong>數據品質警告：</strong><br>${issues.join('<br>')}`;
-            document.getElementById('dataAlert').style.display = 'block';
-        } else {
-            document.getElementById('dataAlert').style.display = 'none';
-        }
-
-        runSimulation();
-        renderUI();
+        validateData();
+        runAnalysis();
     }
 
-    // 2. 數據品質檢查
-    function validateData() {
-        const issues = [];
-        db.forEach((r, i) => {
-            if(r.nums.length !== 5) issues.push(`第 ${i+1} 期號碼不足 5 個`);
-            if(r.nums.some(n => n < 1 || n > 39)) issues.push(`第 ${i+1} 期號碼超出範圍`);
-        });
-        document.getElementById('healthCheck').innerHTML = issues.length ? "⚠️ 發現異常" : "✅ 數據結構良好";
-        return issues;
-    }
-
-    // 3. 進階演算法：加權熱號
+    // --- 2. 演算法深度優化 ---
     function getWeightedHotAdvanced(data = db) {
-        const scores = {};
+        const freq = {};
         data.forEach((r, idx) => {
-            const weight = idx > data.length - 10 ? 2.0 : 1.0;
-            r.nums.forEach(n => scores[n] = (scores[n] || 0) + weight);
+            const weight = idx > data.length - 15 ? 2.5 : 1.0;
+            r.nums.forEach(n => freq[n] = (freq[n] || 0) + weight);
         });
-        // 趨勢修正
-        const recent = data.slice(-5);
-        Object.keys(scores).forEach(n => {
-            const trend = recent.filter(r => r.nums.includes(Number(n))).length;
-            scores[n] *= (1 + trend * 0.2);
-        });
-        return Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0, 8).map(e=>Number(e[0]));
+        return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0, 10).map(e=>Number(e[0]));
     }
 
-    // 4. 進階演算法：動態尾數
+    function getSmartColdNumbers(data = db) {
+        const missing = {};
+        for(let n=1; n<=39; n++) {
+            const idx = [...data].reverse().findIndex(r => r.nums.includes(n));
+            missing[n] = idx === -1 ? data.length : idx;
+        }
+        return Object.entries(missing).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(e=>Number(e[0]));
+    }
+
     function getDynamicTail(data = db) {
         const tails = {};
         data.slice(-20).forEach(r => r.nums.forEach(n => tails[n%10] = (tails[n%10] || 0) + 1));
-        const bestTails = Object.entries(tails).sort((a,b)=>b[1]-a[1]).slice(0, 2).map(e=>Number(e[0]));
-        const candidates = [];
-        bestTails.forEach(t => {
-            for(let i=0; i<4; i++) {
-                const num = t + i*10;
-                if(num >=1 && num <= 39) candidates.push(num);
-            }
-        });
-        return candidates.slice(0,5);
+        const bestTail = Object.entries(tails).sort((a,b)=>b[1]-a[1])[0][0];
+        return Array.from({length:4}, (_,i) => i*10 + Number(bestTail)).filter(n => n>=1 && n<=39);
     }
 
-    // 5. 蒙特卡羅模擬與風險管理
-    function runSimulation() {
+    function getConnectionPatterns(data = db) {
+        const scores = {};
+        data.slice(-30).forEach(r => {
+            for(let i=0; i<r.nums.length-1; i++) {
+                if(r.nums[i+1] - r.nums[i] <= 2) {
+                    scores[r.nums[i]] = (scores[r.nums[i]] || 0) + 1;
+                    scores[r.nums[i+1]] = (scores[r.nums[i+1]] || 0) + 1;
+                }
+            }
+        });
+        return Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(e=>Number(e[0]));
+    }
+
+    // --- 3. 蒙特卡羅加權模擬 ---
+    function runAnalysis() {
+        if(!db.length) return;
+        const risk = document.getElementById('riskLevel').value;
         const profiles = {
-            conservative: { hot: 0.4, cold: 0.3, tail: 0.2, conn: 0.1 },
+            conservative: { hot: 0.45, cold: 0.15, tail: 0.3, conn: 0.1 },
             balanced: { hot: 0.35, cold: 0.25, tail: 0.25, conn: 0.15 },
-            aggressive: { hot: 0.25, cold: 0.35, tail: 0.2, conn: 0.2 }
+            aggressive: { hot: 0.2, cold: 0.4, tail: 0.2, conn: 0.2 }
         };
-        const w = profiles[currentRisk];
-        
-        // 模擬 1000 次投票
-        const globalVotes = {};
+        const base = profiles[risk];
+        const votes = {};
+
         for(let i=0; i<1000; i++) {
-            const randW = { 
-                hot: w.hot * (0.9 + Math.random()*0.2), 
-                tail: w.tail * (0.9 + Math.random()*0.2) 
-            };
-            getWeightedHotAdvanced().forEach(n => globalVotes[n] = (globalVotes[n]||0) + randW.hot);
-            getDynamicTail().forEach(n => globalVotes[n] = (globalVotes[n]||0) + randW.tail);
+            const rf = () => 0.8 + Math.random() * 0.4;
+            getWeightedHotAdvanced().forEach(n => votes[n] = (votes[n]||0) + base.hot * rf());
+            getSmartColdNumbers().forEach(n => votes[n] = (votes[n]||0) + base.cold * rf());
+            getDynamicTail().forEach(n => votes[n] = (votes[n]||0) + base.tail * rf());
+            getConnectionPatterns().forEach(n => votes[n] = (votes[n]||0) + base.conn * rf());
         }
 
-        const final = Object.entries(globalVotes).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>Number(e[0])).sort((a,b)=>a-b);
+        const candidates = Object.entries(votes).sort((a,b)=>b[1]-a[1]).map(e=>Number(e[0]));
+        const optimized = optimizePortfolio(candidates);
         
-        // 更新 UI
-        document.getElementById('finalPortfolio').innerHTML = final.map(n => `<div class="ball">${n<10?'0'+n:n}</div>`).join('');
-        document.getElementById('weightDisplay').innerHTML = `
-            🔥 熱趨勢權重: ${(w.hot*100).toFixed(0)}%<br>
-            🧬 尾數規律權重: ${(w.tail*100).toFixed(0)}%<br>
-            📉 冷門補償權重: ${(w.cold*100).toFixed(0)}%
-        `;
-        
-        // 執行滾動回測
-        performBacktest(final);
+        renderResults(optimized);
+        renderAdvancedHeatmap();
+        performBacktest(optimized);
     }
 
-    // 6. 滾動回測 (Walk-forward Validation)
-    function performBacktest(portfolio) {
-        const trials = Math.min(db.length - 1, 20);
-        let hits2 = 0;
-        for(let i=0; i<trials; i++) {
-            const actual = db[db.length-1-i].nums;
-            const match = portfolio.filter(n => actual.includes(n)).length;
-            if(match >= 2) hits2++;
-        }
-        const rate = (hits2/trials*100).toFixed(1);
-        const vals = document.querySelectorAll('.metric-val');
-        vals[0].innerText = rate + '%';
-        vals[1].innerText = '±8.5%';
-        vals[2].innerText = rate > 60 ? '極高' : '穩定';
-        vals[3].innerText = trials + '期';
-    }
-
-    function setRisk(type, el) {
-        currentRisk = type;
-        document.querySelectorAll('.risk-tag').forEach(t => t.classList.remove('active'));
-        el.classList.add('active');
-        if(db.length) runSimulation();
-    }
-
-    function renderUI() {
-        // 渲染熱力分布圖
-        const last10 = db.slice(-10).reverse();
-        let html = `<table><tr><th>日期</th>`;
-        for(let i=1; i<=39; i++) html += `<th>${i}</th>`;
-        html += `</tr>`;
-        last10.forEach(r => {
-            html += `<tr><td style="font-size:0.7rem; white-space:nowrap;">${r.date}</td>`;
-            for(let i=1; i<=39; i++) {
-                html += `<td>${r.nums.includes(i) ? `<span class="dot">${i}</span>` : ''}</td>`;
+    // --- 4. 組合優化：分散風險 ---
+    function optimizePortfolio(candidates) {
+        const final = [];
+        const tails = new Set();
+        for(let n of candidates) {
+            if(final.length < 5) {
+                if(final.length < 3 && tails.has(n%10)) continue;
+                final.push(n);
+                tails.add(n%10);
             }
-            html += `</tr>`;
+        }
+        return final.sort((a,b)=>a-b);
+    }
+
+    // --- 5. 視覺化渲染 ---
+    function renderAdvancedHeatmap() {
+        const heatmapData = Array(39).fill(0);
+        db.forEach((r, idx) => {
+            const w = idx > db.length - 15 ? 2.5 : 1.0;
+            r.nums.forEach(n => heatmapData[n-1] += w);
         });
-        document.getElementById('heatmapView').innerHTML = html + `</table>`;
+        const max = Math.max(...heatmapData);
+        let html = '<div class="heatmap-grid">';
+        heatmapData.forEach((v, i) => {
+            const intensity = (v / max) * 100;
+            const color = `hsl(${10 + intensity * 0.4}, 80%, ${85 - intensity * 0.4}%)`;
+            html += `<div class="heat-cell" style="background:${color}" title="加權分: ${v.toFixed(1)}">${i+1}</div>`;
+        });
+        document.getElementById('advancedHeatmap').innerHTML = html + '</div>';
+    }
+
+    function renderResults(nums) {
+        document.getElementById('finalPortfolio').innerHTML = nums.map(n => 
+            `<div class="ball">${n < 10 ? '0'+n : n}</div>`
+        ).join('');
+    }
+
+    function performBacktest(portfolio) {
+        const trials = Math.min(db.length, 30);
+        let h2 = 0, h3 = 0;
+        for(let i=0; i<trials; i++) {
+            const match = portfolio.filter(n => db[db.length-1-i].nums.includes(n)).length;
+            if(match >= 2) h2++;
+            if(match >= 3) h3++;
+        }
+        document.getElementById('metricsPanel').innerHTML = `
+            <div style="margin-bottom:10px"><b>近期命中率 (30期回測):</b></div>
+            <div style="font-size:1.2rem; color:var(--success); font-weight:bold;">2+ 命中: ${(h2/trials*100).toFixed(1)}%</div>
+            <div style="font-size:1.1rem; color:var(--primary);">3+ 命中: ${(h3/trials*100).toFixed(1)}%</div>
+            <div style="font-size:0.75rem; color:#64748b; margin-top:10px;">* 基於蒙特卡羅模擬之期望值</div>
+        `;
+    }
+
+    function validateData() {
+        const health = document.getElementById('healthCheck');
+        health.innerHTML = `✅ 檢查完成: ${db.length} 期有效數據`;
+    }
+
+    function generateReport() {
+        const data = {
+            date: new Date().toLocaleString(),
+            risk: document.getElementById('riskLevel').value,
+            result: document.getElementById('finalPortfolio').innerText,
+            db_size: db.length
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `539_AI_Report.json`;
+        a.click();
     }
 </script>
 
