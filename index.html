@@ -1,245 +1,212 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>三星-智能預測系統 v3.0</title>
-    <style>
-        :root {
-            --primary: #00ff99;
-            --primary-dark: #00cc7a;
-            --secondary: #274c77;
-            --secondary-light: #1a3a5f;
-            --danger: #ff6666;
-            --warning: #ffcc00;
-            --info: #4fc3f7;
-            --success: #00ff99;
-            --bg-0: #050b15;
-            --bg-1: #0f1f38;
-            --bg-2: #142b4d;
-            --text-light: #e0f7ff;
-            --text-muted: #8da1b9;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>必中 v3 Stable</title>
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: -apple-system, 'Microsoft JhengHei', sans-serif;
-            background: linear-gradient(135deg, #0b1626, #051122);
-            color: var(--text-light);
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-
-        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-
-        /* Header */
-        .header {
-            text-align: center;
-            padding: 40px 20px;
-            background: linear-gradient(90deg, var(--bg-0), var(--bg-1));
-            border-radius: 20px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(0, 255, 153, 0.1);
-            position: relative;
-        }
-
-        .header::after {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0; width: 100%; height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--warning));
-            border-radius: 0 0 20px 20px;
-        }
-
-        .header h1 { font-size: 2.2rem; color: var(--primary); margin-bottom: 8px; }
-        .subtitle { color: var(--text-muted); font-size: 1rem; }
-
-        /* Panels */
-        .panel {
-            background: var(--bg-1);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
-        }
-
-        .panel:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
-        .panel h2 { font-size: 1.3rem; color: var(--primary); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .panel h2::before { content: ''; width: 4px; height: 20px; background: var(--primary); border-radius: 2px; }
-
-        /* UI Elements */
-        .file-input {
-            width: 100%; padding: 20px; border: 2px dashed rgba(0, 255, 153, 0.2);
-            border-radius: 12px; background: rgba(0,0,0,0.2); color: white; cursor: pointer;
-        }
-
-        .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 15px 0; }
-        
-        .btn {
-            padding: 12px 20px; border: none; border-radius: 10px; cursor: pointer;
-            font-weight: 600; transition: all 0.2s; text-align: center;
-        }
-
-        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: var(--bg-0); }
-        .btn-secondary { background: var(--bg-3); color: white; border: 1px solid rgba(255,255,255,0.1); }
-        .btn:hover { opacity: 0.9; transform: scale(1.02); }
-
-        .text-input {
-            width: 100%; padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(0,0,0,0.3); color: white; margin-bottom: 12px;
-        }
-
-        /* Number Balls */
-        .numbers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px; }
-        .number-ball {
-            aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; background: var(--bg-3); font-size: 1.2rem; cursor: pointer;
-        }
-        .hot { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
-        .cold { background: linear-gradient(135deg, #48dbfb, #2e86de); }
-        .selected { background: var(--primary); color: var(--bg-0); box-shadow: 0 0 15px var(--primary); }
-
-        /* Stats */
-        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; }
-        .stat-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
-        .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--primary); }
-
-        /* Status & Loading */
-        .status { padding: 12px; border-radius: 8px; font-size: 0.9rem; margin: 10px 0; border-left: 4px solid; }
-        .info { background: rgba(79, 195, 247, 0.1); border-color: var(--info); color: var(--info); }
-        .warning { background: rgba(255, 204, 0, 0.1); border-color: var(--warning); color: var(--warning); }
-        
-        .loading { text-align: center; padding: 20px; display: none; }
-        .spinner { 
-            width: 30px; height: 30px; border: 3px solid rgba(0,255,153,0.1); 
-            border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Footer */
-        .footer { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.85rem; }
-
-        @media (max-width: 600px) {
-            .header h1 { font-size: 1.8rem; }
-            .btn-group { grid-template-columns: 1fr 1fr; }
-        }
-    </style>
+<style>
+:root{
+  --bg:#0b1626;
+  --panel:#142b4d;
+  --primary:#00ff99;
+  --hot:#ff6666;
+  --cold:#4fc3f7;
+  --warn:#ffcc00;
+  --text:#e0f7ff;
+}
+body{
+  margin:0;
+  background:linear-gradient(135deg,#050b15,#0b1626);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
+}
+.container{max-width:900px;margin:auto;padding:20px}
+.panel{
+  background:var(--panel);
+  border-radius:16px;
+  padding:20px;
+  margin-bottom:20px;
+}
+.panel h2{
+  margin:0 0 15px;
+  color:var(--primary);
+}
+input,button{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  margin-bottom:10px;
+}
+button{
+  background:linear-gradient(135deg,#274c77,#1a3a5f);
+  color:#fff;
+  cursor:pointer;
+}
+button.primary{background:linear-gradient(135deg,#00ff99,#00cc7a)}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(48px,1fr));
+  gap:8px;
+}
+.ball{
+  height:48px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:bold;
+  background:#274c77;
+}
+.ball.hot{background:var(--hot)}
+.ball.cold{background:var(--cold)}
+.ball.warn{background:var(--warn);color:#000}
+.box{margin-top:15px}
+.status{font-size:.9rem;margin-top:10px;color:#8da1b9}
+hr{border:none;border-top:1px solid rgba(255,255,255,.1);margin:15px 0}
+</style>
 </head>
+
 <body>
-
 <div class="container">
-    <header class="header">
-        <h1>🎯 三星-智能預測系統 v3.0</h1>
-        <p class="subtitle">AI 驅動大數據分析 | 多維度規律計算 | 繁體中文版</p>
-    </header>
 
-    <section class="panel">
-        <h2>📊 數據導入</h2>
-        <input type="file" id="csvInput" class="file-input" accept=".csv">
-        <div class="status info">支援格式：日期, 號碼1, 號碼2, 號碼3, 號碼4, 號碼5</div>
-        <div id="basicStats" class="stats-row" style="margin-top:15px;"></div>
-    </section>
+<!-- Panel 1 -->
+<div class="panel">
+  <h2>1️⃣ 資料載入</h2>
+  <input type="file" id="csvInput" accept=".csv"/>
+  <div id="csvStatus" class="status"></div>
+</div>
 
-    <section class="panel">
-        <h2>🔍 智能分析層</h2>
-        <div class="btn-group">
-            <button class="btn btn-primary" onclick="runAnalysis('full')">深度全量分析</button>
-            <button class="btn btn-secondary" onclick="runAnalysis('quick')">快速掃描</button>
-            <button class="btn btn-secondary" onclick="runAnalysis('pattern')">模式識別</button>
-        </div>
-        
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p>正在處理大數據模組...</p>
-        </div>
+<!-- Panel 2 -->
+<div class="panel">
+  <h2>2️⃣ 冷 / 熱號</h2>
+  <div id="hotCold"></div>
+</div>
 
-        <div id="analysisResults" style="display:none;">
-            <div id="hotNumbersBox" class="panel" style="background:rgba(0,0,0,0.2);">
-                <h3 style="margin-bottom:15px; font-size:1rem; color:var(--danger);">🔥 熱門號碼篩選</h3>
-                <div class="numbers-grid" id="hotGrid"></div>
-            </div>
-        </div>
-    </section>
+<!-- Panel 3 -->
+<div class="panel">
+  <h2>3️⃣ 遺漏 / 連開</h2>
+  <div id="missRepeat"></div>
+</div>
 
-    <section class="panel">
-        <h2>🤖 智能預測生成</h2>
-        <div class="btn-group">
-            <button class="btn btn-primary" onclick="generatePrediction('smart')">AI 智能組合</button>
-            <button class="btn btn-secondary" onclick="generatePrediction('trend')">趨勢優先</button>
-            <button class="btn btn-secondary" onclick="generatePrediction('balance')">平衡分布</button>
-        </div>
-        <div id="predictionOutput" class="numbers-grid" style="margin-top:20px;"></div>
-    </section>
+<!-- Panel 4 -->
+<div class="panel">
+  <h2>4️⃣ 連號分布</h2>
+  <div id="consecutive"></div>
+</div>
 
-    <section class="panel" style="background:var(--bg-0);">
-        <h2>🧠 核心算法權重</h2>
-        <div class="stats-row">
-            <div class="stat-item"><div class="stat-label">頻率權重</div><div class="stat-value">35%</div></div>
-            <div class="stat-item"><div class="stat-label">遺漏計算</div><div class="stat-value">25%</div></div>
-            <div class="stat-item"><div class="stat-label">連號邏輯</div><div class="stat-value">20%</div></div>
-            <div class="stat-item"><div class="stat-label">冷熱互補</div><div class="stat-value">20%</div></div>
-        </div>
-        <div class="status warning" style="margin-top:20px;">
-            ⚠️ 免責聲明：本系統基於歷史數據進行統計分析，結果僅供參考。彩券開獎具隨機性，請理性參與。
-        </div>
-    </section>
+<!-- Panel 5 -->
+<div class="panel">
+  <h2>5️⃣ 模擬預測（3 組）</h2>
+  <button class="primary" onclick="generate()">產生預測</button>
+  <div id="prediction"></div>
+</div>
 
-    <footer class="footer">
-        <p>© 2026 三星預測系統 v3.0 | 數據分析引擎</p>
-        <p>最後更新: 2026-01-16</p>
-    </footer>
 </div>
 
 <script>
-    // 模擬數據與核心邏輯
-    let historyData = [];
+/* ===== 資料層 ===== */
+let draws=[];
 
-    function runAnalysis(type) {
-        document.getElementById('loading').style.display = 'block';
-        document.getElementById('analysisResults').style.display = 'none';
+document.getElementById('csvInput').addEventListener('change',e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    draws=[];
+    r.result.trim().split(/\r?\n/).slice(1).forEach(l=>{
+      const p=l.split(',').map(x=>x.trim());
+      const nums=p.slice(1,6).map(Number);
+      if(nums.every(n=>n>=1&&n<=39))draws.push(nums);
+    });
+    document.getElementById('csvStatus').innerText=
+      `已載入 ${draws.length} 期`;
+    analyze();
+  };
+  r.readAsText(file);
+});
 
-        setTimeout(() => {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('analysisResults').style.display = 'block';
-            
-            // 模擬分析結果
-            const grid = document.getElementById('hotGrid');
-            grid.innerHTML = '';
-            [3, 7, 12, 19, 24, 33].forEach(n => {
-                grid.innerHTML += `<div class="number-ball hot">${n}</div>`;
-            });
-        }, 800);
+/* ===== 分析核心 ===== */
+function analyze(){
+  const freq={},last={},repeat={},consCount={};
+  draws.forEach((d,i)=>{
+    d.forEach(n=>{
+      freq[n]=(freq[n]||0)+1;
+      last[n]=i;
+    });
+    for(let j=0;j<4;j++){
+      if(d[j+1]===d[j]+1)
+        consCount[d[j]]=(consCount[d[j]]||0)+1;
     }
+  });
 
-    function generatePrediction(strategy) {
-        const output = document.getElementById('predictionOutput');
-        output.innerHTML = '';
-        const nums = [];
-        while(nums.length < 5) {
-            let r = Math.floor(Math.random() * 39) + 1;
-            if(!nums.includes(r)) nums.push(r);
-        }
-        nums.sort((a,b)=>a-b).forEach(n => {
-            output.innerHTML += `<div class="number-ball selected">${n}</div>`;
-        });
+  // 熱冷
+  const sorted=[...Array(39)].map((_,i)=>i+1)
+    .sort((a,b)=>(freq[b]||0)-(freq[a]||0));
+  renderBalls('hotCold',
+    sorted.slice(0,10),'hot',
+    sorted.slice(-10),'cold'
+  );
+
+  // 遺漏
+  const miss=[...Array(39)].map((_,i)=>i+1)
+    .sort((a,b)=>(draws.length-(last[b]||0))-(draws.length-(last[a]||0)))
+    .slice(0,10);
+  document.getElementById('missRepeat').innerHTML=
+    `<div class="grid">${miss.map(n=>`<div class="ball warn">${n}</div>`).join('')}</div>`;
+
+  // 連號
+  document.getElementById('consecutive').innerHTML=
+    `<div class="status">歷史連號出現位置：${Object.keys(consCount).length} 種</div>`;
+}
+
+/* ===== UI 小工具 ===== */
+function renderBalls(id,a,ca,b,cb){
+  document.getElementById(id).innerHTML=
+    `<div class="grid">
+      ${a.map(n=>`<div class="ball ${ca}">${n}</div>`).join('')}
+      ${b.map(n=>`<div class="ball ${cb}">${n}</div>`).join('')}
+     </div>`;
+}
+
+/* ===== 預測引擎 ===== */
+function generate(){
+  if(!draws.length)return alert('請先載入資料');
+  const freq={},last={};
+  draws.forEach((d,i)=>d.forEach(n=>{
+    freq[n]=(freq[n]||0)+1;
+    last[n]=i;
+  }));
+
+  const pool=[...Array(39)].map((_,i)=>{
+    const n=i+1;
+    const f=(freq[n]||0)/draws.length;
+    const m=draws.length-(last[n]||0);
+    let s=0;
+    if(f>0.05&&f<0.12)s+=30;
+    if(m>10)s+=m;
+    return {n,s};
+  }).sort((a,b)=>b.s-a.s);
+
+  const sets=[];
+  for(let k=0;k<3;k++){
+    const sel=[];
+    while(sel.length<5){
+      const c=pool[Math.floor(Math.random()*15)].n;
+      if(!sel.includes(c))sel.push(c);
     }
+    sets.push(sel.sort((a,b)=>a-b));
+  }
 
-    // 初始化模擬統計
-    window.onload = () => {
-        const stats = document.getElementById('basicStats');
-        const items = [
-            {l:'總採樣期數', v:'1,200'},
-            {l:'平均和值', v:'102.5'},
-            {l:'數據完整度', v:'100%'}
-        ];
-        items.forEach(i => {
-            stats.innerHTML += `<div class="stat-item"><div class="stat-label">${i.l}</div><div class="stat-value">${i.v}</div></div>`;
-        });
-    };
+  document.getElementById('prediction').innerHTML=
+    sets.map(s=>`
+      <div class="box">
+        <div class="grid">
+          ${s.map(n=>`<div class="ball hot">${n}</div>`).join('')}
+        </div>
+      </div>`).join('');
+}
 </script>
-
 </body>
 </html>
