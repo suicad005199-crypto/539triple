@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 三維連動系統 - 優化 v58</title>
+    <title>AI 穩定熵值系統 - 優化 v59</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -22,21 +22,21 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v58 連動補償版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v59 穩定熵值版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 連動預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 滾動回測 (目標：擊穿 3 星斷層)</h3>
+            <h3 class="panel-title">3. 滾動回測 (目標：重啟命中 2)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v58)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v59)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -62,15 +62,11 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getTripleLinkagePick(history) {
+        function getSteadyPick(history) {
             let scores = Array(40).fill(0);
             let missArr = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
-            const recentNums = history.slice(-5).flatMap(h => h.nums);
             
-            let tailFreq = Array(10).fill(0);
-            recentNums.forEach(n => tailFreq[n % 10]++);
-
             for (let i = 1; i <= 39; i++) {
                 let m = 0;
                 for (let j = history.length - 1; j >= 0; j--) {
@@ -78,41 +74,35 @@
                 }
                 missArr[i] = m;
 
-                // 核心分層評分
-                if (m === 1) scores[i] += 600;       // 強斜連
-                else if (m >= 5 && m <= 9) scores[i] += 480; // 黃金反彈
-                else if (m === 0) scores[i] += 320;  // 連莊
-                else if (m >= 2 && m <= 4) scores[i] += 50;  // 溫水過濾
+                if (m === 1) scores[i] += 520;       
+                else if (m >= 5 && m <= 9) scores[i] += 450; 
+                else if (m === 0) scores[i] += 280;  
                 else if (m >= 13) scores[i] = 0;
+                else scores[i] += 100;
+
+                if (lastNums.some(ln => Math.abs(ln - i) === 1)) scores[i] += 150;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
 
-            // 1. 選取主核心 (Seed 1)
-            let seed1 = sorted[0];
-            final.push(seed1);
+            // 1. 三分區強制選號 (13, 13, 13)
+            let zones = [[1,13], [14,26], [27,39]];
+            zones.forEach(z => {
+                let bestInZone = sorted.find(n => n >= z[0] && n <= z[1]);
+                if (bestInZone) final.push(bestInZone);
+            });
 
-            // 2. 選取連動核心 (與 Seed 1 同尾或鄰號的高分球)
-            let seed2 = sorted.find(n => !final.includes(n) && (n % 10 === seed1 % 10 || Math.abs(n - seed1) === 1));
-            if (seed2) final.push(seed2);
+            // 2. 遺漏屬性補齊 (強化 v48 的 L5-9 邏輯)
+            let l59Match = sorted.find(n => !final.includes(n) && missArr[n] >= 5 && missArr[n] <= 9);
+            if (l59Match) final.push(l59Match);
 
-            // 3. 補償選號 (確保異區塊且具備反彈潛力)
+            // 3. 共振補位 (鄰號或同尾)
             for (let n of sorted) {
                 if (final.length >= 5) break;
                 if (final.includes(n)) continue;
-
-                let zoneDiff = final.every(f => Math.abs(Math.floor(f/10) - Math.floor(n/10)) >= 0);
-                let tailMatch = final.some(f => f % 10 === n % 10);
-                let neighborMatch = final.some(f => Math.abs(f - n) === 1);
-
-                // 強化命中3的集彈性：同尾或鄰號優先，但限制同一區間不過多
-                let zoneCount = final.filter(f => Math.floor(f/10) === Math.floor(n/10)).length;
-                if ((tailMatch || neighborMatch) && zoneCount < 2) {
-                    final.push(n);
-                } else if (final.length >= 4) {
-                    final.push(n);
-                }
+                let resonance = final.some(f => (f % 10 === n % 10) || (Math.abs(f - n) === 1));
+                if (resonance || final.length >= 4) final.push(n);
             }
 
             return final.sort((a, b) => a - b);
@@ -122,7 +112,7 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getTripleLinkagePick(data.slice(0, i));
+                const pred = getSteadyPick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -130,7 +120,7 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getTripleLinkagePick(data);
+            const nextP = getSteadyPick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
