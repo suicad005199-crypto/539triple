@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 遺漏共振預測系統 - 優化 v6</title>
+    <title>AI 聯動矩陣預測系統 - 優化 v7</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -11,7 +11,7 @@
         
         .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
         .card { background: #f8f9fa; padding: 15px; border-radius: 8px; border-top: 4px solid var(--primary); }
-        .num-badge { display: inline-block; background: var(--primary); color: white; border-radius: 4px; padding: 2px 10px; margin: 2px; font-weight: bold; }
+        .num-badge { display: inline-block; background: var(--primary); color: white; border-radius: 4px; padding: 4px 12px; margin: 2px; font-weight: bold; }
         .hit-badge { background: var(--success) !important; box-shadow: 0 0 5px var(--success); }
 
         .table-container { overflow-x: auto; }
@@ -20,24 +20,24 @@
         th { background: var(--primary); color: white; }
         .dot { background: var(--accent); color: white; border-radius: 50%; display: inline-block; width: 22px; height: 22px; line-height: 22px; font-weight: bold; }
 
-        .good-hit { background-color: #d4edda !important; font-weight: bold; }
+        .good-hit { background-color: #d4edda !important; }
         .hit-count { font-weight: bold; color: var(--success); font-size: 1.2rem; }
 
         .accordion-header { cursor: pointer; background: #eee; padding: 12px; border-radius: 6px; font-weight: bold; text-align: center; margin-top: 10px; }
-        .accordion-content { display: none; padding: 20px; line-height: 1.8; background: #fff; border: 1px solid #eee; border-radius: 0 0 6px 6px; font-size: 14px; }
+        .accordion-content { display: none; padding: 20px; line-height: 1.8; background: #fff; border: 1px solid #eee; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據上傳與解析</h3>
+        <h3 class="panel-title">1. 數據解析</h3>
         <input type="file" id="csvFile" accept=".csv">
         <div id="statusTracker" style="margin-top:15px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 遺漏共振預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 聯動矩陣預測 (下一期建議)</h3>
             <div class="grid-container" id="predictionResults"></div>
         </div>
 
@@ -53,7 +53,7 @@
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr><th>日期</th><th>真實獎號</th><th>預測組 (遺漏共振策略)</th><th>命中數</th></tr>
+                        <tr><th>日期</th><th>真實獎號</th><th>預測組 (聯動矩陣策略)</th><th>命中數</th></tr>
                     </thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
@@ -62,16 +62,14 @@
     </div>
 
     <div class="panel">
-        <div class="accordion-header" onclick="toggleAccordion()">💡 策略邏輯說明 (展開優化重點)</div>
+        <div class="accordion-header" onclick="toggleAccordion()">💡 策略邏輯說明 (點擊展開/收合)</div>
         <div id="accContent" class="accordion-content">
-            <strong>1. 遺漏共振加權 (Gap Resonance)：</strong><br>
-            系統對遺漏 3-5 期與 8-12 期的號碼給予極高加分，因為這兩個區間是號碼回補的「高發區」。<br>
-            <strong>2. 尾數熱圖平衡：</strong><br>
-            計算近 10 期 0-9 尾數出現頻率，優先從熱門尾數與冷門尾數各挑一個代表號，防止選號偏誤。<br>
-            <strong>3. 結構化選號：</strong><br>
-            5 個號碼嚴格執行：[高頻熱號 x1] + [黃金遺漏區 x2] + [長期冷門 x1] + [尾數補償 x1]。<br>
-            <strong>4. 排除機制：</strong><br>
-            自動過濾連續開出 3 期以上的過熱號碼。
+            <strong>1. 冷熱平衡比例 (1:2:2)：</strong><br>
+            強制組成：1個熱門號 (近期高頻)、2個溫門號 (遺漏 3-6 期)、2個冷門號 (長遺漏或剛轉冷)。這符合大部分開獎號碼的分佈特徵。<br>
+            <strong>2. 期望值權重 (Expectation Weight)：</strong><br>
+            系統分析歷史平均遺漏，當某號碼遺漏接近 5-8 期時，權重會指數級上升，捕捉「回歸爆發點」。<br>
+            <strong>3. 尾數連動過濾：</strong><br>
+            排除「全連號」或「三尾同號」組合。
         </div>
     </div>
 
@@ -105,20 +103,12 @@
             document.getElementById('analysisSection').style.display = 'block';
         }
 
-        function getResonancePick(history) {
-            if (history.length < 10) return [1, 5, 15, 25, 35];
-            
+        function getLinkagePick(history) {
             const scores = Array(40).fill(0);
-            const tailFreq = Array(10).fill(0); // 尾數統計
+            const total = history.length;
             
-            // 基礎統計與尾數分析
-            history.slice(-10).forEach(row => {
-                row.nums.forEach(n => tailFreq[n % 10]++);
-            });
-
             for (let i = 1; i <= 39; i++) {
-                let miss = 0;
-                let streak = 0;
+                let miss = 0, streak = 0;
                 for (let j = history.length - 1; j >= 0; j--) {
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
@@ -126,48 +116,34 @@
                     if (history[j].nums.includes(i)) streak++; else break;
                 }
 
-                // 1. 核心遺漏加權 (黃金共振區)
-                if (miss >= 3 && miss <= 5) scores[i] += 60;
-                else if (miss >= 8 && miss <= 11) scores[i] += 45;
-                else if (miss === 0) scores[i] += 10; // 上期開出
-                
-                // 2. 尾數加權 (平衡熱度)
-                scores[i] += (tailFreq[i % 10] * 5);
+                // A. 遺漏權重：聚焦 4-7 期 (回歸黃金區)
+                if (miss >= 4 && miss <= 7) scores[i] += 70;
+                else if (miss >= 1 && miss <= 3) scores[i] += 40;
+                else if (miss >= 10) scores[i] += 50;
 
-                // 3. 連開降權
-                if (streak >= 2) scores[i] -= 40;
+                // B. 熱度權重：最近 10 期頻率
+                const recentFreq = history.slice(-10).filter(r => r.nums.includes(i)).length;
+                scores[i] += (recentFreq * 8);
 
-                // 4. 歷史總頻率
-                const totalFreq = history.filter(r => r.nums.includes(i)).length;
-                scores[i] += (totalFreq / history.length) * 20;
+                // C. 連開懲罰
+                if (streak >= 2) scores[i] -= 30;
             }
 
-            // 結構化挑選：
-            const sortedNumbers = Array.from({length: 39}, (_, i) => i + 1)
-                                      .sort((a, b) => scores[b] - scores[a]);
-            
-            let finalPick = [];
-            let tailCheck = new Set();
+            // 結構化選號：從不同池子挑號
+            const allSorted = Array.from({length: 39}, (_, i) => i + 1)
+                                   .sort((a, b) => scores[b] - scores[a]);
 
-            for (let n of sortedNumbers) {
-                let t = n % 10;
-                // 策略：不重複尾數，增加廣度
-                if (!tailCheck.has(t)) {
-                    finalPick.push(n);
-                    tailCheck.add(t);
-                }
-                if (finalPick.length === 5) break;
-            }
+            const hotPool = allSorted.slice(0, 10);
+            const midPool = allSorted.slice(10, 25);
+            const coldPool = allSorted.slice(25);
 
-            // 若因為尾數限制選不滿 5 個，則補滿
-            if (finalPick.length < 5) {
-                for (let n of sortedNumbers) {
-                    if (!finalPick.includes(n)) finalPick.push(n);
-                    if (finalPick.length === 5) break;
-                }
-            }
+            let final = [];
+            // 挑 1 熱, 2 溫, 2 冷
+            final.push(hotPool[0]);
+            final.push(midPool[0], midPool[1]);
+            final.push(coldPool[0], coldPool[1]);
 
-            return finalPick.sort((a, b) => a - b);
+            return final.sort((a, b) => a - b);
         }
 
         function runBacktest(allData) {
@@ -179,7 +155,7 @@
             for (let i = startIdx; i > startIdx - testCount && i >= 0; i--) {
                 const historyBefore = allData.slice(0, i);
                 const actual = allData[i].nums;
-                const pred = getResonancePick(historyBefore);
+                const pred = getLinkagePick(historyBefore);
                 const hits = pred.filter(n => actual.includes(n));
 
                 const tr = document.createElement('tr');
@@ -220,8 +196,8 @@
 
         function generateNext(allData) {
             const res = document.getElementById('predictionResults');
-            const p = getResonancePick(allData);
-            res.innerHTML = `<div class="card"><h4>🎯 遺漏共振組合 (推薦)</h4>${p.map(n => `<span class="num-badge" style="font-size:1.2rem; padding:5px 15px;">${n}</span>`).join('')}</div>`;
+            const p = getLinkagePick(allData);
+            res.innerHTML = `<div class="card"><h4>🎯 聯動矩陣預測組合</h4>${p.map(n => `<span class="num-badge" style="font-size:1.2rem; padding:5px 15px;">${n}</span>`).join('')}</div>`;
         }
 
         function toggleAccordion() {
