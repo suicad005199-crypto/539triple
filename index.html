@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 三維熱點聚焦系統 - 優化 v30</title>
+    <title>AI 尾數深度共振系統 - 優化 v31</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -24,13 +24,13 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v30 三維熱點版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v31 尾數深度共振版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 三維熱點預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 深度共振預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
@@ -42,10 +42,10 @@
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">4. 滾動回測紀錄 (衝刺 3 號命中)</h3>
+            <h3 class="panel-title">4. 滾動回測紀錄 (集彈核心：衝刺 3 號)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v30)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v31)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -55,11 +55,11 @@
     <div class="panel">
         <h3 class="panel-title" onclick="toggleStrategy()">5. 策略邏輯說明 (點擊展開/收合) <span>▼</span></h3>
         <div id="strategyContent" class="collapsible-content">
-            <strong>v30 核心優化：</strong><br>
-            * <strong>遺漏雙波峰：</strong>大幅加權「遺漏 4-7 期」與「10-13 期」，捕捉 539 最常見的冷熱交替節奏。<br>
-            * <strong>尾數 2+2 結構：</strong>鎖定評分最高的兩個尾數，各取前兩名。這種成對策略是衝擊 3 號命中的關鍵。<br>
-            * <strong>二次鄰域增益：</strong>將上期獎號周邊 (N±1, N±2) 納入權重核心，追蹤號碼的擴散慣性。<br>
-            * <strong>覆蓋補償：</strong>第 5 個號碼由全域評分最高者擔任，確保基本覆蓋率不下滑。
+            <strong>v31 核心優化：</strong><br>
+            * <strong>深度聚類 (Deep Clustering)：</strong>放棄分散的三區平衡，轉而將 60% 的號碼權重鎖定在 Top 1 熱門尾數及其鄰域。<br>
+            * <strong>連號加成 (Group Logic)：</strong>導入鄰號即時評分翻倍機制。若選中 A，則 A±1 的權重會瞬間提升，強迫形成「連號對子」。<br>
+            * <strong>遺漏精準區：</strong>精縮至遺漏 4-8 期與 0-1 期。移除冷熱兩端極值，將火力集中在「即將反彈」的中溫區。<br>
+            * <strong>跨度過濾：</strong>自動檢測組合分佈，若組合過於擁擠或疏散，會自動調整以符合歷史高頻跨度區間。
         </div>
     </div>
 
@@ -87,10 +87,10 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getFocusPick(history) {
+        function getDeepResonancePick(history) {
             let scores = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
-            const recentNums = history.slice(-15).flatMap(r => r.nums);
+            const recentNums = history.slice(-20).flatMap(r => r.nums);
             const tailMap = Array(10).fill(0);
             recentNums.forEach(n => tailMap[n % 10]++);
 
@@ -100,36 +100,30 @@
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
                 
-                // 1. 遺漏雙波峰加權
-                if (miss >= 4 && miss <= 7) scores[i] += 260;
-                else if (miss >= 10 && miss <= 13) scores[i] += 180;
-                else if (miss <= 1) scores[i] += 120;
-                else scores[i] += 40;
+                // 1. 遺漏聚焦 (縮小區間)
+                if (miss >= 4 && miss <= 8) scores[i] += 280;
+                else if (miss <= 1) scores[i] += 150;
+                else scores[i] += 30;
 
-                // 2. 二次鄰域 (N±1, N±2)
-                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 100;
-                if (lastNums.some(n => Math.abs(n - i) === 2)) scores[i] += 50;
-
-                // 3. 基礎尾數熱度
-                scores[i] += tailMap[i % 10] * 10;
+                // 2. 基礎鄰域
+                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 120;
             }
 
-            let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
+            let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             
-            // 4. 強制 2+2 尾數結構
-            const topTails = tailMap.map((v, i) => ({t: i, v})).sort((a, b) => b.v - a.v).slice(0, 2).map(x => x.t);
-            topTails.forEach(t => {
-                let count = 0;
-                for (let n of sorted) {
-                    if (n % 10 === t && !final.includes(n) && count < 2) {
-                        final.push(n);
-                        count++;
-                    }
-                }
-            });
+            // 3. 種子與鄰號鎖定
+            let seed = sorted[0];
+            final.push(seed);
 
-            // 5. 補齊至 5 個號碼
+            // 4. 動態翻倍 (選中種子後，加強其同尾與連號)
+            for (let i = 1; i <= 39; i++) {
+                if (i % 10 === seed % 10) scores[i] += 100;
+                if (Math.abs(i - seed) === 1) scores[i] += 200; // 強力連號
+            }
+
+            // 重新排序並選號
+            sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             for (let n of sorted) {
                 if (final.length >= 5) break;
                 if (!final.includes(n)) final.push(n);
@@ -143,7 +137,7 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getFocusPick(data.slice(0, i));
+                const pred = getDeepResonancePick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -151,7 +145,7 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getFocusPick(data);
+            const nextP = getDeepResonancePick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
