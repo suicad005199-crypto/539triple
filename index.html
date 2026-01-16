@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 雙維塌陷系統 - 優化 v85</title>
+    <title>AI 交叉坍塌系統 - 優化 v86</title>
     <style>
         :root { --p: #2c3e50; --s: #27ae60; --b: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--b); padding: 20px; }
@@ -19,17 +19,17 @@
 <body>
 
     <div class="panel">
-        <h3>1. 數據解析 (v85 雙維塌陷版)</h3>
+        <h3>1. 數據解析 (v86 交叉坍塌版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="resSection" style="display:none;">
         <div class="panel">
-            <h3>2. AI 飽和預測 (衝刺 40% 命中 3)</h3>
+            <h3>2. AI 交叉預測 (目標：40% 命中 3)</h3>
             <div id="predResult"></div>
         </div>
         <div class="panel">
-            <h3>3. 滾動回測 (高壓集彈檢驗)</h3>
+            <h3>3. 滾動回測 (集彈力檢驗)</h3>
             <table>
                 <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合</th><th>命中</th></tr></thead>
                 <tbody id="btBody"></tbody>
@@ -51,18 +51,18 @@
             tbody.innerHTML = '';
             
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getCollapsePick(data.slice(0, i));
+                const pred = getCrossCollapsePick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            document.getElementById('predResult').innerHTML = getCollapsePick(data).map(n=>`<span class="num-badge" style="font-size:1.3rem">${n}</span>`).join('');
+            document.getElementById('predResult').innerHTML = getCrossCollapsePick(data).map(n=>`<span class="num-badge" style="font-size:1.3rem">${n}</span>`).join('');
             document.getElementById('resSection').style.display = 'block';
         }
 
-        function getCollapsePick(hist) {
+        function getCrossCollapsePick(hist) {
             let sc = Array(40).fill(0), ms = Array(40).fill(0);
             const last = hist[hist.length-1].nums, recent = hist.slice(-6).flatMap(h=>h.nums);
             let tf = Array(10).fill(0); recent.forEach(n=>tf[n%10]++);
@@ -70,33 +70,32 @@
             for (let i=1; i<=39; i++) {
                 let m = 0; for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) m++; else break; }
                 ms[i] = m;
-                // v85 高壓核心權重
-                if(m===1) sc[i]+=1600; 
-                else if(m>=5 && m<=9) sc[i]+=1400; 
+                // v86 交叉加權
+                if(m===1) sc[i]+=1500; 
+                else if(m>=5 && m<=9) sc[i]+=1300; 
                 else if(m===0) sc[i]+=600; 
-                else if(m>=11 || (m>=2 && m<=4)) sc[i]=0; 
-                else sc[i]+=100;
+                else if(m>=12 || (m>=2 && m<=4)) sc[i]=0; 
+                else sc[i]+=150;
 
-                sc[i] += tf[i%10]*280; 
-                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=450;
+                sc[i] += tf[i%10]*230; 
+                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=400;
             }
 
             let sorted = Array.from({length:39},(_,i)=>i+1).sort((a,b)=>sc[b]-sc[a]);
             let res = [];
 
-            // 1. 主攻區：最強尾數飽和打擊 (3 顆)
-            let topTail = sorted[0] % 10;
-            let tailCluster = sorted.filter(n => n % 10 === topTail).slice(0, 3);
-            tailCluster.forEach(n => res.push(n));
+            // 1. 識別最強兩個尾數
+            let tails = Array.from({length:10}, (_,i)=>({t:i, s:tf[i]})).sort((a,b)=>b.s-a.s);
+            
+            // 2. 交叉填入 (熱尾 A 二顆, 熱尾 B 二顆)
+            [tails[0].t, tails[1].t].forEach(t => {
+                let matches = sorted.filter(n => n % 10 === t).slice(0, 2);
+                matches.forEach(n => { if(res.length < 4) res.push(n); });
+            });
 
-            // 2. 側擊區：熱點鄰號連鎖 (2 顆)
-            let remaining = sorted.filter(n => !res.includes(n));
-            let slant = remaining.find(n => ms[n] <= 1);
-            if(slant) {
-                res.push(slant);
-                let neighbor = remaining.find(n => !res.includes(n) && Math.abs(n-slant) === 1);
-                if(neighbor) res.push(neighbor);
-            }
+            // 3. 填入最強斜連核心 (1 顆)
+            let slant = sorted.find(n => !res.includes(n) && ms[n] <= 1);
+            if(slant) res.push(slant);
 
             while (res.length < 5) {
                 let next = sorted.find(n => !res.includes(n));
