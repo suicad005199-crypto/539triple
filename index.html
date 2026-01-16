@@ -3,80 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 數據分析系統</title>
+    <title>539 數據與分布圖</title>
     <style>
         :root { --primary: #d32f2f; --bg: #f4f4f9; --table-border: #ddd; }
         body { font-family: sans-serif; margin: 0; background: var(--bg); }
         
-        /* 置頂 Panel */
+        /* 頂部面板 */
         .top-panel { background: #333; color: white; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 15px; position: sticky; top: 0; z-index: 100; }
         
-        /* 分布圖 Panel */
-        .chart-panel { background: white; border-bottom: 2px solid var(--table-border); max-height: 400px; overflow: auto; padding: 10px; }
-        table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: 12px; }
-        th, td { border: 1px solid var(--table-border); text-align: center; padding: 4px; width: 22px; }
-        th { background: #eee; position: sticky; top: 0; }
-        .date-col { width: 80px; background: #f9f9f9; font-weight: bold; position: sticky; left: 0; z-index: 10; }
-        .hit { background: var(--primary); color: white; border-radius: 50%; display: inline-block; width: 18px; height: 18px; line-height: 18px; font-weight: bold; }
+        /* 分布圖面板 */
+        .distribution-panel { background: white; border-bottom: 2px solid #ccc; max-height: 400px; overflow: auto; padding: 10px; }
+        table { border-collapse: collapse; width: 100%; font-size: 12px; text-align: center; }
+        th, td { border: 1px solid var(--table-border); padding: 4px; min-width: 25px; }
+        th { background: #eee; position: sticky; top: 0; z-index: 10; }
+        .date-col { min-width: 80px; background: #f9f9f9; }
+        .hit { background: var(--primary); color: white; border-radius: 50%; display: inline-block; width: 20px; height: 20px; line-height: 20px; }
 
         /* 主產生器區 */
-        .main { padding: 2rem; text-align: center; }
-        .ball-result { margin-top: 20px; display: flex; gap: 10px; justify-content: center; }
-        .ball { width: 40px; height: 40px; line-height: 40px; background: #ffc107; border-radius: 50%; font-weight: bold; border: 2px solid #ffa000; }
-        button { padding: 10px 25px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 5px; font-weight: bold; }
+        .main { padding: 40px 20px; text-align: center; }
+        button { padding: 10px 25px; font-size: 1rem; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 5px; font-weight: bold; }
+        .result { margin-top: 25px; display: flex; gap: 10px; justify-content: center; }
+        .ball { width: 45px; height: 45px; line-height: 45px; background: #ffc107; border-radius: 50%; font-weight: bold; border: 2px solid #ffa000; font-size: 1.2rem; }
     </style>
 </head>
 <body>
 
 <div class="top-panel">
-    <span>歷史 CSV 上傳:</span>
+    <span>數據上傳 (CSV):</span>
     <input type="file" id="csvFile" accept=".csv" onchange="handleFile()">
-    <span id="file-status">請上傳資料</span>
+    <span id="file-info" style="font-size: 0.8rem; color: #ccc;">未選取檔案</span>
 </div>
 
-<div class="chart-panel" id="chartPanel">
-    <p style="text-align: center; color: #888;">上傳資料後將在此顯示連號分布圖</p>
+<div class="distribution-panel" id="distPanel">
+    <p style="text-align: center; color: #888;">請先上傳 CSV 資料以顯示分布圖</p>
 </div>
 
 <div class="main">
-    <button onclick="generateNumbers()">隨機產生一組號碼</button>
-    <div class="ball-result" id="result"></div>
+    <button onclick="generateNumbers()">隨機產生號碼</button>
+    <div class="result" id="result"></div>
 </div>
 
 <script>
+    // 處理檔案並產出分布圖
     function handleFile() {
-        const file = document.getElementById('csvFile').files[0];
-        if (!file) return;
+        const fileInput = document.getElementById('csvFile');
+        const info = document.getElementById('file-info');
+        const distPanel = document.getElementById('distPanel');
+        const file = fileInput.files[0];
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const rows = e.target.result.split('\n').filter(row => row.trim() !== '');
-            renderChart(rows);
-            document.getElementById('file-status').innerText = `載入 ${rows.length} 筆`;
-        };
-        reader.readAsText(file);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const rows = e.target.result.split('\n').filter(row => row.trim() !== '');
+                info.innerText = `已讀取: ${file.name} (${rows.length} 筆)`;
+                renderTable(rows);
+            };
+            reader.readAsText(file);
+        }
     }
 
-    function renderChart(rows) {
-        let html = '<table><thead><tr><th class="date-col">日期</th>';
+    function renderTable(rows) {
+        let html = `<table><thead><tr><th class="date-col">日期</th>`;
+        // 產生 1-39 標頭
         for (let i = 1; i <= 39; i++) html += `<th>${i}</th>`;
-        html += '</tr></thead><tbody>';
+        html += `</tr></thead><tbody>`;
 
         rows.forEach(row => {
             const cols = row.split(',');
-            const date = cols[0]; // 第一欄日期
-            const winningNums = cols.slice(1).map(n => parseInt(n.trim())); // 後續欄位為號碼
+            const date = cols[0]; // 假設第一欄是日期
+            const numbers = cols.slice(1).map(n => parseInt(n.trim())); // 假設後續是號碼
 
             html += `<tr><td class="date-col">${date}</td>`;
             for (let i = 1; i <= 39; i++) {
-                const isHit = winningNums.includes(i);
-                html += `<td>${isHit ? `<span class="hit">${i}</span>` : ''}</td>`;
+                if (numbers.includes(i)) {
+                    html += `<td><span class="hit">${i}</span></td>`;
+                } else {
+                    html += `<td></td>`;
+                }
             }
-            html += '</tr>';
+            html += `</tr>`;
         });
 
-        html += '</tbody></table>';
-        document.getElementById('chartPanel').innerHTML = html;
+        html += `</tbody></table>`;
+        document.getElementById('distPanel').innerHTML = html;
     }
 
     function generateNumbers() {
@@ -86,13 +95,14 @@
             if(!nums.includes(r)) nums.push(r);
         }
         nums.sort((a, b) => a - b);
-        const resDiv = document.getElementById('result');
-        resDiv.innerHTML = '';
+        
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '';
         nums.forEach(n => {
             const b = document.createElement('div');
             b.className = 'ball';
-            b.innerText = n < 10 ? '0'+n : n;
-            resDiv.appendChild(b);
+            b.innerText = n < 10 ? '0' + n : n;
+            resultDiv.appendChild(b);
         });
     }
 </script>
