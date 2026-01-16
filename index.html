@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 雙中心戰鬥群系統 - 優化 v66</title>
+    <title>AI 矩陣共振系統 - 優化 v67</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -11,7 +11,7 @@
         .num-badge { display: inline-block; background: var(--primary); color: white; border-radius: 4px; padding: 4px 12px; margin: 2px; font-weight: bold; }
         .hit-badge { background: var(--success) !important; box-shadow: 0 0 5px var(--success); }
         .table-container { overflow-x: auto; margin-top: 10px; }
-        table { border-collapse: collapse; width: 100%; width: 100%; white-space: nowrap; background: white; }
+        table { border-collapse: collapse; width: 100%; white-space: nowrap; background: white; }
         th, td { border: 1px solid #eee; text-align: center; padding: 10px 5px; font-size: 13px; }
         th { background: var(--primary); color: white; }
         .good-hit { background-color: #e8f5e9 !important; border: 2px solid var(--success) !important; }
@@ -21,21 +21,21 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v66 雙中心戰鬥群)</h3>
+        <h3 class="panel-title">1. 數據解析 (v67 矩陣共振版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 戰鬥群預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 矩陣預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 滾動回測 (目標：80% 覆蓋與穩定命中 2)</h3>
+            <h3 class="panel-title">3. 滾動回測 (目標：80% 覆蓋與集彈命中 2)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v66)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v67)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -61,7 +61,7 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getBattleGroupPick(history) {
+        function getMatrixPick(history) {
             let scores = Array(40).fill(0);
             let missArr = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
@@ -75,33 +75,37 @@
                     if (!history[j].nums.includes(i)) m++; else break;
                 }
                 missArr[i] = m;
-                // 評分體系
-                if (m === 1) scores[i] += 650;
-                else if (m >= 5 && m <= 9) scores[i] += 550;
-                else if (m === 0) scores[i] += 300;
-                else scores[i] += 120;
-                scores[i] += tailFreq[i % 10] * 30;
-                if (lastNums.some(ln => Math.abs(ln - i) === 1)) scores[i] += 150;
+                // v67 分層加權
+                if (m === 1) scores[i] += 750;       // 強斜連 (優先提升命中 2)
+                else if (m >= 5 && m <= 9) scores[i] += 500; // 黃金期
+                else if (m === 0) scores[i] += 350;  // 連莊
+                else if (m >= 12) scores[i] = 0;     // 排除深冷
+                else scores[i] += 150;
+
+                scores[i] += tailFreq[i % 10] * 40;
+                if (lastNums.some(ln => Math.abs(ln - i) === 1)) scores[i] += 200;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
 
-            // --- 群組 A：熱連攻擊群 ---
-            let leadA = sorted.find(n => missArr[n] <= 1);
-            final.push(leadA);
-            let mateA = sorted.find(n => !final.includes(n) && Math.abs(n - leadA) === 1);
-            if (mateA) final.push(mateA);
+            // 1. 選取絕對核心 (熱度最高者)
+            let core = sorted[0];
+            final.push(core);
 
-            // --- 群組 B：冷彈反擊群 ---
-            let leadB = sorted.find(n => !final.includes(n) && missArr[n] >= 5 && missArr[n] <= 9);
-            if (leadB) {
-                final.push(leadB);
-                let mateB = sorted.find(n => !final.includes(n) && (n % 10 === leadB % 10));
-                if (mateB) final.push(mateB);
-            }
+            // 2. 矩陣鎖定 A：同尾共振 (找該尾數權重第二高者)
+            let tailMate = sorted.find(n => !final.includes(n) && (n % 10 === core % 10));
+            if (tailMate) final.push(tailMate);
 
-            // --- 補償位：全域最強補位 ---
+            // 3. 矩陣鎖定 B：鄰號擴張 (找 core 左右最強的一顆)
+            let neighborMate = sorted.find(n => !final.includes(n) && Math.abs(n - core) === 1);
+            if (neighborMate) final.push(neighborMate);
+
+            // 4. 跨區補償 (從異區塊找反彈號，提升覆蓋率)
+            let backNode = sorted.find(n => !final.includes(n) && Math.abs(Math.floor(n/10) - Math.floor(core/10)) >= 1 && missArr[n] >= 5);
+            if (backNode) final.push(backNode);
+
+            // 5. 補齊位
             for (let n of sorted) {
                 if (final.length >= 5) break;
                 if (!final.includes(n)) final.push(n);
@@ -114,14 +118,14 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getBattleGroupPick(data.slice(0, i));
+                const pred = getMatrixPick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 2) tr.className = 'good-hit';
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getBattleGroupPick(data);
+            const nextP = getMatrixPick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
