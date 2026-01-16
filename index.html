@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>高階 CSV 數據預測與回測系統</title>
+    <title>高階 AI 數據預測系統 - 優化策略版</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -23,22 +23,26 @@
         .dot { background: var(--accent); color: white; border-radius: 50%; display: inline-block; width: 22px; height: 22px; line-height: 22px; font-weight: bold; }
 
         /* 回測樣式 */
-        .backtest-row:hover { background: #f1f1f1; }
+        .good-hit { background-color: #d4edda !important; }
         .hit-count { font-weight: bold; font-size: 1.1rem; color: var(--success); }
-        .good-hit { background-color: #d4edda !important; } /* 命中2個以上高亮 */
+
+        /* 收合面板樣式 */
+        .accordion-header { cursor: pointer; background: #eee; padding: 12px; border-radius: 6px; font-weight: bold; text-align: center; margin-top: 10px; transition: 0.3s; }
+        .accordion-header:hover { background: #ddd; }
+        .accordion-content { display: none; padding: 20px; line-height: 1.8; background: #fff; border: 1px solid #eee; border-radius: 0 0 6px 6px; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據上傳與狀態追蹤</h3>
+        <h3 class="panel-title">1. 數據上傳</h3>
         <input type="file" id="csvFile" accept=".csv">
         <div id="statusTracker" style="margin-top:15px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. 優化預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. 核心演算法預測 (下一期)</h3>
             <div class="grid-container" id="predictionResults"></div>
         </div>
 
@@ -50,15 +54,33 @@
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">4. 滾動回測紀錄 (固定 10 期驗證)</h3>
+            <h3 class="panel-title">4. 滾動回測紀錄 (顯示最近 10 期)</h3>
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr><th>日期</th><th>真實獎號</th><th>AI 預測組合 (加權策略)</th><th>命中數</th></tr>
+                        <tr><th>日期</th><th>真實獎號</th><th>預測組 (AI 綜合加權)</th><th>命中數</th></tr>
                     </thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="accordion-header" onclick="toggleAccordion()">💡 策略邏輯說明 (點擊展開/收合)</div>
+        <div id="accContent" class="accordion-content">
+            <strong>1. 多維度評分系統：</strong><br>
+            每個號碼起始 0 分，依據以下指標加權：<br>
+            - <b>總頻率權重：</b> 出現次數佔總期數比例。<br>
+            - <b>近期熱度：</b> 最近 5 期內出現過的號碼獲得 2 倍額外加成。<br>
+            - <b>遺漏補償：</b> 計算該號碼已連續幾期未開，遺漏期數越高則加分越多。<br>
+            - <b>鄰近帶動：</b> 若上期開出鄰近號（N±1），則該號碼加分。<br>
+            <br>
+            <strong>2. 回測機制：</strong><br>
+            針對最近 10 期進行「盲測」，即每一期預測時，系統會自動切斷該期及之後的資料，僅以前置數據進行計算，確保回測具備實戰參考價值。<br>
+            <br>
+            <strong>3. UI 標示：</strong><br>
+            若單期命中數達到 2 個（含）以上，該列將以綠色高亮標示。
         </div>
     </div>
 
@@ -92,52 +114,54 @@
             document.getElementById('analysisSection').style.display = 'block';
         }
 
-        // --- 優化策略演算法 ---
-        function getAdvancedPick(history) {
+        // --- 進化版策略演算法 ---
+        function getSmartPick(history) {
+            if (history.length === 0) return [1, 2, 3, 4, 5];
+            
             const scores = Array(40).fill(0);
             const totalPeriods = history.length;
+            const recentHistory = history.slice(-5);
             
-            // 1. 計算頻率 (基礎分)
+            // 基礎統計
             const freq = {};
             history.forEach(row => row.nums.forEach(n => freq[n] = (freq[n] || 0) + 1));
-            
-            for(let i=1; i<=39; i++) {
-                // 頻率加權 (出現次數 / 總期數 * 100)
-                scores[i] += ((freq[i] || 0) / totalPeriods) * 100;
+
+            for (let i = 1; i <= 39; i++) {
+                // 1. 總頻率加權
+                scores[i] += ((freq[i] || 0) / totalPeriods) * 50;
                 
-                // 2. 遺漏加權 (越久沒開，加成越高)
-                let missCount = 0;
-                for(let j=history.length-1; j>=0; j--) {
-                    if(!history[j].nums.includes(i)) missCount++; else break;
+                // 2. 近期熱度加權 (最近 5 期)
+                const recentCount = recentHistory.filter(row => row.nums.includes(i)).length;
+                scores[i] += recentCount * 15;
+
+                // 3. 遺漏深度加權
+                let miss = 0;
+                for (let j = history.length - 1; j >= 0; j--) {
+                    if (!history[j].nums.includes(i)) miss++; else break;
                 }
-                scores[i] += (missCount * 1.5); // 遺漏權重係數 1.5
-                
-                // 3. 鄰近號加權 (上期號碼的左右號)
-                const lastNums = history[history.length-1].nums;
-                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 5;
+                scores[i] += (miss * 2.5);
+
+                // 4. 上期鄰近帶動
+                const lastNums = history[history.length - 1].nums;
+                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 8;
             }
 
-            // 4. 區間平衡挑選
-            // 排序後，從不同區間挑選最高分的號碼
-            const sortedNumbers = Array.from({length: 39}, (_, i) => i + 1)
-                                      .sort((a, b) => scores[b] - scores[a]);
-
-            return sortedNumbers.slice(0, 5).sort((a,b) => a-b);
+            // 取得最高分前 5 名
+            return Array.from({length: 39}, (_, i) => i + 1)
+                        .sort((a, b) => scores[b] - scores[a])
+                        .slice(0, 5).sort((a, b) => a - b);
         }
 
         function runBacktest(allData) {
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
-            // 強制顯示 10 期回測
             const testCount = 10;
-            const startIndex = allData.length - 1;
-            
-            for (let i = startIndex; i > startIndex - testCount && i >= 0; i--) {
-                const historyBefore = allData.slice(0, i);
-                if (historyBefore.length < 1) continue;
+            const startIdx = allData.length - 1;
 
+            for (let i = startIdx; i > startIdx - testCount && i >= 0; i--) {
+                const historyBefore = allData.slice(0, i);
                 const actual = allData[i].nums;
-                const pred = getAdvancedPick(historyBefore);
+                const pred = getSmartPick(historyBefore);
                 const hits = pred.filter(n => actual.includes(n));
 
                 const tr = document.createElement('tr');
@@ -158,7 +182,9 @@
             header.innerHTML = '<th>日期</th>' + Array.from({length: 39}, (_, i) => `<th>${i+1}</th>`).join('');
             body.innerHTML = data.map(row => {
                 let tr = `<td>${row.date}</td>`;
-                for (let i = 1; i <= 39; i++) tr += `<td>${row.nums.includes(i) ? `<span class="dot">${i}</span>` : ''}</td>`;
+                for (let i = 1; i <= 39; i++) {
+                    tr += `<td>${row.nums.includes(i) ? `<span class="dot">${i}</span>` : ''}</td>`;
+                }
                 return `<tr>${tr}</tr>`;
             }).join('');
         }
@@ -169,20 +195,25 @@
             tracker.innerHTML = '';
             for (let i = 1; i <= 39; i++) {
                 let count = 0, isHit = last.includes(i);
-                for (let j = allData.length-1; j >= 0; j--) {
+                for (let j = allData.length - 1; j >= 0; j--) {
                     if (allData[j].nums.includes(i) === isHit) count++; else break;
                 }
-                tracker.innerHTML += `<span class="status-tag" style="background:${isHit?'#ffeaa7':'#eee'}">${i}:${isHit?'連':'未'}${count}</span>`;
+                tracker.innerHTML += `<span style="display:inline-block; padding:2px 6px; border-radius:4px; font-size:11px; border:1px solid #ddd; background:${isHit?'#ffeaa7':'#eee'}">${i}:${isHit?'連':'未'}${count}</span>`;
             }
         }
 
         function generateNext(allData) {
             const res = document.getElementById('predictionResults');
-            const p = getAdvancedPick(allData);
+            const p = getSmartPick(allData);
             res.innerHTML = `
-                <div class="card"><h4>🎯 AI 加權預測</h4>${p.map(n => `<span class="num-badge" style="font-size:1.2rem; padding:5px 15px;">${n}</span>`).join('')}</div>
-                <div class="card"><h4>💡 策略優化說明</h4>採用「頻率 + 遺漏 + 近期鄰近」三合一演算法。</div>
+                <div class="card"><h4>🎯 AI 優化預測</h4>${p.map(n => `<span class="num-badge" style="font-size:1.2rem; padding:5px 15px;">${n}</span>`).join('')}</div>
+                <div class="card"><h4>💡 狀態</h4>系統已根據目前 ${allData.length} 期數據進行動態加權。</div>
             `;
+        }
+
+        function toggleAccordion() {
+            const c = document.getElementById('accContent');
+            c.style.display = (c.style.display === 'block') ? 'none' : 'block';
         }
     </script>
 </body>
