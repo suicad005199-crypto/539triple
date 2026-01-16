@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 彈性張力網系統 - 優化 v43</title>
+    <title>AI 三位一體重力場系統 - 優化 v44</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -22,21 +22,21 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v43 彈性張力版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v44 重力場版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 張力預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 重力場預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 滾動回測 (目標：找回命中 2-3)</h3>
+            <h3 class="panel-title">3. 滾動回測 (目標：重啟爆發)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v43)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v44)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -62,7 +62,7 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getElasticPick(history) {
+        function getGravityPick(history) {
             let scores = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
             
@@ -72,37 +72,41 @@
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
                 
-                // 動態加權
-                if (miss === 1) scores[i] += 420;       // 斜連
-                else if (miss >= 5 && miss <= 7) scores[i] += 350; // 黃金爆發區
-                else if (miss === 0) scores[i] += 250;  // 連莊補強
-                else if (miss >= 11) scores[i] = 0;     // 嚴格過濾
-                else scores[i] += 80;
+                // 動能分級
+                if (miss === 1) scores[i] += 450;       // 斜連
+                else if (miss >= 5 && miss <= 9) scores[i] += 380; // 黃金反彈
+                else if (miss === 0) scores[i] += 280;  // 連莊
+                else if (miss >= 13) scores[i] = 0;     // 剔除長冷
+                else scores[i] += 100;
 
-                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 100;
+                // 鄰號加成
+                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 150;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
             
-            // 1. 核心 A
-            let coreA = sorted[0];
-            final.push(coreA);
+            // --- 重力場核心 ---
+            // 1. 選取第一核心 (Seed)
+            let seed = sorted[0];
+            final.push(seed);
 
-            // 2. 互補核心 B (遠距離 + 不同尾)
-            let coreB = sorted.find(n => !final.includes(n) && Math.abs(n - coreA) > 12 && (n % 10 !== coreA % 10));
-            if (!coreB) coreB = sorted.find(n => !final.includes(n));
-            final.push(coreB);
+            // 2. 選取 Seed 的最強斜連或鄰號
+            let link1 = sorted.find(n => !final.includes(n) && Math.abs(n - seed) === 1);
+            if (link1) final.push(link1);
 
-            // 3. 張力延伸 (核心 A & B 的最強關聯)
-            let ext1 = sorted.find(n => !final.includes(n) && (Math.abs(n - coreA) === 1 || n % 10 === coreA % 10));
-            if (ext1) final.push(ext1);
-            
-            let ext2 = sorted.find(n => !final.includes(n) && (Math.abs(n - coreB) === 1 || n % 10 === coreB % 10));
-            if (ext2) final.push(ext2);
+            // 3. 選取 Seed 的最強同尾
+            let link2 = sorted.find(n => !final.includes(n) && (n % 10 === seed % 10));
+            if (link2) final.push(link2);
 
-            // 4. 全域補齊
-            for (let n of sorted) {
+            // 4. 飽和延伸 (優先與已選號碼同尾的號碼)
+            let reSorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => {
+                let aBonus = final.some(f => f % 10 === a % 10) ? 200 : 0;
+                let bBonus = final.some(f => f % 10 === b % 10) ? 200 : 0;
+                return (scores[b] + bBonus) - (scores[a] + aBonus);
+            });
+
+            for (let n of reSorted) {
                 if (final.length >= 5) break;
                 if (!final.includes(n)) final.push(n);
             }
@@ -114,7 +118,7 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getElasticPick(data.slice(0, i));
+                const pred = getGravityPick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -122,7 +126,7 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getElasticPick(data);
+            const nextP = getGravityPick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
