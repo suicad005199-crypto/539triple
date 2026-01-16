@@ -1,187 +1,99 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSV 號碼分析與預測工具</title>
+<title>模擬預測系統</title>
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  background-color: #f9f9f9;
-  padding: 20px;
-}
-h1, h2 {
-  text-align: center;
-}
-input[type="file"], input[type="number"] {
-  display: block;
-  margin: 10px auto;
-  font-size: 18px;
-  width: 80%;
-}
-button {
-  display: block;
-  margin: 15px auto;
-  padding: 12px 25px;
-  font-size: 18px;
-  border: none;
-  background-color: #007AFF;
-  color: white;
-  border-radius: 10px;
-}
-#result {
-  margin-top: 20px;
-  font-size: 18px;
-  line-height: 1.6;
-}
-.number-box {
-  display: inline-block;
-  margin: 5px;
-  padding: 10px 15px;
-  border-radius: 50%;
-  background-color: #FFD700;
-  color: #000;
-  font-weight: bold;
-  font-size: 20px;
-  width: 45px;
-  text-align: center;
-}
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  table { border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid #ccc; padding: 5px 10px; text-align: center; }
+  #results { margin-top: 20px; }
 </style>
 </head>
 <body>
 
-<h1>CSV 號碼分析與預測工具</h1>
-<p style="text-align:center;">手動輸入五個號碼，分析規則後生成下一組預測號碼</p>
+<h1>模擬預測系統</h1>
 
-<div style="text-align:center;">
-  <input type="number" id="num1" placeholder="號碼 1" min="1" max="39">
-  <input type="number" id="num2" placeholder="號碼 2" min="1" max="39">
-  <input type="number" id="num3" placeholder="號碼 3" min="1" max="39">
-  <input type="number" id="num4" placeholder="號碼 4" min="1" max="39">
-  <input type="number" id="num5" placeholder="號碼 5" min="1" max="39">
-</div>
+<input type="file" id="csvFile" accept=".csv" />
+<button onclick="processCSV()">上傳並分析</button>
 
-<input type="file" id="csvFile" accept=".csv">
-<button id="analyzeBtn">分析規則 & 生成預測號碼</button>
-
-<div id="result"></div>
+<div id="results"></div>
 
 <script>
-// 解析 CSV
+function processCSV() {
+    const fileInput = document.getElementById('csvFile');
+    if (!fileInput.files.length) {
+        alert("請選擇 CSV 檔案");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const data = parseCSV(text);
+        const analysis = analyzeData(data);
+        displayResults(data, analysis);
+    };
+
+    reader.readAsText(file);
+}
+
+// CSV 解析
 function parseCSV(text) {
-  const rows = text.trim().split(/\r?\n/);
-  const data = [];
-  rows.slice(1).forEach(row => {
-    const cols = row.split(',');
-    const nums = cols.slice(1).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-    data.push(nums);
-  });
-  return data;
+    const lines = text.trim().split('\n');
+    return lines.map(line => line.split(',').map(x => x.trim()));
 }
 
-// 計算最近 N 天出現次數
-function getRecentNumbers(data, days=15) {
-  const recent = {};
-  const start = Math.max(0, data.length - days);
-  for(let i=start;i<data.length;i++){
-    data[i].forEach(n=> recent[n]=(recent[n]||0)+1);
-  }
-  return recent;
-}
+// 策略分析
+function analyzeData(data) {
+    // 假設每行是 [期號,號碼1,號碼2,...]
+    const counts = {};
+    const totalNumbers = [];
 
-// 依據規則生成下一組號碼
-function predictNumbers(data) {
-  const ranges = [
-    [1,10],
-    [11,20],
-    [21,30],
-    [31,39]
-  ];
+    data.forEach(row => {
+        const numbers = row.slice(1).map(Number);
+        numbers.forEach(n => {
+            counts[n] = (counts[n] || 0) + 1;
+            totalNumbers.push(n);
+        });
+    });
 
-  const recent = getRecentNumbers(data,15);
-  const nextNumbers = [];
+    // 最常出現號碼
+    const sortedCounts = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    const mostFrequent = sortedCounts.slice(0, 5).map(x => x[0]);
 
-  ranges.forEach(range=>{
-    const [min,max] = range;
-    const candidates = [];
-    for(let i=min;i<=max;i++){
-      candidates.push({num:i, recentCount: recent[i]||0});
-    }
-    // 優先選最近出現過的號碼，若無則隨機
-    candidates.sort((a,b)=>b.recentCount - a.recentCount);
-    const top = candidates.filter(c=>c.recentCount===candidates[0].recentCount);
-    const chosen = top[Math.floor(Math.random()*top.length)];
-    nextNumbers.push(chosen.num);
-  });
+    // 冷門號碼
+    const leastFrequent = sortedCounts.slice(-5).map(x => x[0]);
 
-  // 補足成五個號碼
-  while(nextNumbers.length<5){
-    const remaining = [];
-    for(let i=1;i<=39;i++){
-      if(!nextNumbers.includes(i)) remaining.push({num:i,recentCount: recent[i]||0});
-    }
-    remaining.sort((a,b)=>b.recentCount - a.recentCount);
-    const top = remaining.filter(c=>c.recentCount===remaining[0].recentCount);
-    const chosen = top[Math.floor(Math.random()*top.length)];
-    nextNumbers.push(chosen.num);
-  }
+    // 奇偶比
+    const odd = totalNumbers.filter(n => n%2===1).length;
+    const even = totalNumbers.filter(n => n%2===0).length;
 
-  return nextNumbers;
+    return {mostFrequent, leastFrequent, odd, even};
 }
 
 // 顯示結果
-function displayResult(inputNumbers,predictedNumbers,data){
-  const resultDiv = document.getElementById('result');
-  let html = `<h2>輸入號碼</h2><div>`;
-  inputNumbers.forEach(n=>html+=`<span class="number-box">${n}</span>`);
-  html += `</div>`;
+function displayResults(data, analysis) {
+    let html = `<h2>分析結果</h2>`;
+    html += `<p>最常出現號碼: ${analysis.mostFrequent.join(', ')}</p>`;
+    html += `<p>冷門號碼: ${analysis.leastFrequent.join(', ')}</p>`;
+    html += `<p>奇數總數: ${analysis.odd}, 偶數總數: ${analysis.even}</p>`;
 
-  html += `<h2>下一組預測號碼</h2><div>`;
-  predictedNumbers.forEach(n=>html+=`<span class="number-box">${n}</span>`);
-  html += `</div>`;
+    // 模擬下一期預測號碼（簡單策略: 結合最常 + 冷門號碼）
+    const predicted = [...analysis.mostFrequent.slice(0,3), ...analysis.leastFrequent.slice(0,2)];
+    html += `<p>模擬下一期預測號碼: ${predicted.join(', ')}</p>`;
 
-  // 分析規則
-  const recent = getRecentNumbers(data,15);
-  html += `<h2>規則分析</h2><ul>`;
-  inputNumbers.forEach(n=>{
-    const range = n<=10?"1-10":n<=20?"11-20":n<=30?"21-30":"31-39";
-    const count = recent[n]||0;
-    html += `<li>號碼 ${n} → 區間 ${range}，最近 15 天出現 ${count} 次</li>`;
-  });
-  html += "</ul>";
+    // 顯示原始資料
+    html += `<h3>歷史資料</h3><table><tr>${data[0].map(h=>`<th>${h}</th>`).join('')}</tr>`;
+    data.slice(1).forEach(row=>{
+        html += `<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`;
+    });
+    html += `</table>`;
 
-  resultDiv.innerHTML = html;
+    document.getElementById('results').innerHTML = html;
 }
-
-document.getElementById('analyzeBtn').addEventListener('click',()=>{
-  const nums = [
-    parseInt(document.getElementById('num1').value),
-    parseInt(document.getElementById('num2').value),
-    parseInt(document.getElementById('num3').value),
-    parseInt(document.getElementById('num4').value),
-    parseInt(document.getElementById('num5').value)
-  ];
-  if(nums.some(n=>isNaN(n)||n<1||n>39)){
-    alert("請輸入 1-39 的五個號碼");
-    return;
-  }
-
-  const fileInput = document.getElementById('csvFile');
-  const file = fileInput.files[0];
-  if(!file){
-    alert("請先上傳 CSV 檔案");
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e){
-    const text = e.target.result;
-    const data = parseCSV(text);
-    const predicted = predictNumbers(data);
-    displayResult(nums,predicted,data);
-  };
-  reader.readAsText(file);
-});
 </script>
 
 </body>
