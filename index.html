@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 三維熱度平衡系統 - 優化 v16</title>
+    <title>AI 動態重心預測系統 - 優化 v17</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -16,19 +16,20 @@
         th { background: var(--primary); color: white; }
         .dot { background: var(--accent); color: white; border-radius: 50%; display: inline-block; width: 20px; height: 20px; line-height: 20px; font-weight: bold; }
         .good-hit { background-color: #e8f5e9 !important; border: 2px solid var(--success) !important; }
+        .best-hit { background-color: #fff3cd !important; border: 2px solid #f1c40f !important; }
         .hit-count { font-weight: bold; color: var(--success); font-size: 1.3rem; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據分析 (v16 三維平衡版)</h3>
+        <h3 class="panel-title">1. 數據分析 (v17 動態重心版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 三維平衡預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 重心共振預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
@@ -40,10 +41,10 @@
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">4. 滾動回測紀錄 (集彈優化)</h3>
+            <h3 class="panel-title">4. 滾動回測 (目標：兼顧覆蓋與集彈)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v16)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v17)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -69,53 +70,55 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function get3DBalancePick(history) {
+        function getCentroidPick(history) {
             const scores = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
-            const pools = { hot: [], warm: [], cold: [] };
+            
+            // 1. 計算重心 (近 5 期均值)
+            const recentNums = history.slice(-5).flatMap(r => r.nums);
+            const avg = recentNums.reduce((a, b) => a + b, 0) / recentNums.length;
+
+            // 2. 尾數熱度
+            const tailFreq = Array(10).fill(0);
+            recentNums.forEach(n => tailFreq[n % 10]++);
 
             for (let i = 1; i <= 39; i++) {
                 let miss = 0;
                 for (let j = history.length - 1; j >= 0; j--) {
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
-                
-                // 分層標記
-                if (miss <= 2) pools.hot.push(i);
-                else if (miss <= 7) pools.warm.push(i);
-                else pools.cold.push(i);
 
-                // 核心加權邏輯
-                if (miss >= 4 && miss <= 7) scores[i] += 150; // 黃金溫號區
-                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 100; // 鄰號連動
-                if (miss === 0) scores[i] += 40; // 連莊潛力
+                // A. 遺漏加權 (黃金 4-8 期)
+                if (miss >= 4 && miss <= 8) scores[i] += 140;
                 
-                // 尾數共振 (近期高頻尾數)
-                const recentTails = history.slice(-5).flatMap(r => r.nums.map(n => n % 10));
-                const tailCount = recentTails.filter(t => t === (i % 10)).length;
-                scores[i] += tailCount * 10;
+                // B. 重心偏移加權 (靠近平均值的號碼更有共振感)
+                const distToAvg = Math.abs(i - avg);
+                scores[i] += (20 - distToAvg) * 2;
+
+                // C. 鄰號與連莊
+                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 90;
+                if (miss === 0) scores[i] += 50;
+
+                // D. 尾數加權
+                scores[i] += tailFreq[i % 10] * 12;
             }
 
             const sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             
-            // 比例選號：強制 2溫 + 2熱 + 1冷 (依得分排序補位)
+            // 3. 聚類選號：確保含有一組「同尾」或「連號」
             let final = [];
-            const pickFromPool = (poolNums, count) => {
-                let picked = 0;
-                for (let n of sorted) {
-                    if (poolNums.includes(n) && !final.includes(n)) {
-                        final.push(n);
-                        picked++;
-                        if (picked >= count) break;
-                    }
+            final.push(sorted[0]);
+
+            for (let n of sorted.slice(1)) {
+                if (final.length >= 5) break;
+                // 優先選擇與已選號碼「同尾」或「相鄰」的高分號
+                const hasRelation = final.some(f => (f % 10 === n % 10) || (Math.abs(f - n) === 1));
+                if (hasRelation || final.length < 2) { 
+                    final.push(n);
                 }
-            };
+            }
 
-            pickFromPool(pools.warm, 2);
-            pickFromPool(pools.hot, 2);
-            pickFromPool(pools.cold, 1);
-
-            // 若池子不足則補齊
+            // 補齊
             for (let n of sorted) {
                 if (final.length >= 5) break;
                 if (!final.includes(n)) final.push(n);
@@ -129,14 +132,15 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = get3DBalancePick(data.slice(0, i));
+                const pred = getCentroidPick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
-                if (hits.length >= 2) tr.className = 'good-hit';
+                if (hits.length === 3) tr.className = 'best-hit';
+                else if (hits.length >= 2) tr.className = 'good-hit';
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = get3DBalancePick(data);
+            const nextP = getCentroidPick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
