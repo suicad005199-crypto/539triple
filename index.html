@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 雙錨點飽和系統 - 優化 v49</title>
+    <title>AI 動態張力系統 - 優化 v50</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -22,21 +22,21 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v49 飽和攻擊版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v50 張力矩陣版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 飽和預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 張力預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 滾動回測 (目標：衝刺命中 3 號)</h3>
+            <h3 class="panel-title">3. 滾動回測 (目標：重啟 70%+ 覆蓋)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v49)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v50)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -62,13 +62,13 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getSaturatedPick(history) {
+        function getTensionPick(history) {
             let scores = Array(40).fill(0);
             let missArr = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
             const recentNums = history.slice(-5).flatMap(r => r.nums);
             
-            // 尾數熱度統計
+            // 尾數熱度
             let tailFreq = Array(10).fill(0);
             recentNums.forEach(n => tailFreq[n % 10]++);
 
@@ -79,44 +79,36 @@
                 }
                 missArr[i] = m;
 
-                // 核心評分邏輯
-                if (m === 1) scores[i] += 500;       // 斜連
-                else if (m >= 5 && m <= 9) scores[i] += 400; // 反彈
-                else if (m === 0) scores[i] += 250;  // 連莊
-                else if (m >= 12) scores[i] = 0;     // 廢冷
+                if (m === 1) scores[i] += 500;       
+                else if (m >= 5 && m <= 9) scores[i] += 400; 
+                else if (m === 0) scores[i] += 250;  
+                else if (m >= 13) scores[i] = 0;     
                 else scores[i] += 100;
 
-                // 尾數共振加成
-                scores[i] += tailFreq[i % 10] * 20;
+                // 排除極冷尾數
+                if (tailFreq[i % 10] === 0) scores[i] -= 50;
                 if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 120;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
             
-            // 1. 選取雙錨點 (熱與反彈)
-            let anchor1 = sorted.find(n => missArr[n] <= 1);
-            final.push(anchor1);
-            
-            let anchor2 = sorted.find(n => !final.includes(n) && missArr[n] >= 5 && missArr[n] <= 9);
-            if (!anchor2) anchor2 = sorted[1];
-            final.push(anchor2);
+            // 1. 核心球 (1)
+            let core = sorted[0];
+            final.push(core);
 
-            // 2. 飽和選號：優先選取與錨點有「雙重關係」的號碼
+            // 2. 集彈球 (2) - 優先找核心的同尾或鄰號
+            let clustering = sorted.filter(n => !final.includes(n) && (n % 10 === core % 10 || Math.abs(n - core) === 1));
+            for(let i=0; i<2 && i<clustering.length; i++) final.push(clustering[i]);
+
+            // 3. 防禦球 (2) - 必須具備物理位移 (距離 > 10)
+            let defense = sorted.filter(n => !final.includes(n) && final.every(f => Math.abs(f - n) > 10));
+            for(let i=0; i<2 && i<defense.length; i++) final.push(defense[i]);
+
+            // 4. 安全補位
             for (let n of sorted) {
                 if (final.length >= 5) break;
-                if (final.includes(n)) continue;
-
-                let relationCount = 0;
-                final.forEach(f => {
-                    if (f % 10 === n % 10) relationCount++;
-                    if (Math.abs(f - n) === 1) relationCount++;
-                });
-
-                // 強制讓號碼向錨點靠攏
-                if (relationCount >= 1 || final.length >= 4) {
-                    final.push(n);
-                }
+                if (!final.includes(n)) final.push(n);
             }
 
             return final.sort((a, b) => a - b);
@@ -126,7 +118,7 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getSaturatedPick(data.slice(0, i));
+                const pred = getTensionPick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -134,7 +126,7 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getSaturatedPick(data);
+            const nextP = getTensionPick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
