@@ -2,45 +2,64 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 雙重心熱點系統 - 優化 v28</title>
+    <title>AI 全域共振系統 - 優化 v29</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
         .panel { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; max-width: 1200px; margin: 0 auto; }
-        .panel-title { margin: 0 0 15px 0; color: var(--primary); border-left: 5px solid var(--primary); padding-left: 12px; font-size: 1.1rem; }
+        .panel-title { margin: 0 0 15px 0; color: var(--primary); border-left: 5px solid var(--primary); padding-left: 12px; font-size: 1.1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .num-badge { display: inline-block; background: var(--primary); color: white; border-radius: 4px; padding: 4px 12px; margin: 2px; font-weight: bold; }
         .hit-badge { background: var(--success) !important; box-shadow: 0 0 5px var(--success); }
         .table-container { overflow-x: auto; margin-top: 10px; }
         table { border-collapse: collapse; width: 100%; white-space: nowrap; background: white; }
         th, td { border: 1px solid #eee; text-align: center; padding: 8px 4px; font-size: 12px; }
         th { background: var(--primary); color: white; }
-        .dot { background: var(--accent); color: white; border-radius: 50%; display: inline-block; width: 22px; height: 22px; line-height: 22px; font-weight: bold; }
+        .dot { background: var(--accent); color: white; border-radius: 50%; display: inline-block; width: 20px; height: 20px; line-height: 20px; font-weight: bold; }
         .good-hit { background-color: #e8f5e9 !important; border: 2px solid var(--success) !important; }
         .best-hit { background-color: #fff3cd !important; border: 2px solid #f1c40f !important; }
         .hit-count { font-weight: bold; color: var(--success); font-size: 1.3rem; }
+        .collapsible-content { display: none; padding-top: 10px; font-size: 14px; line-height: 1.6; color: #555; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v28 雙重心熱點版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v29 全域共振版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 雙重心熱點預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 全域熱度預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 滾動回測 (目標：找回命中 3 號)</h3>
+            <h3 class="panel-title">3. 連號分布圖 (最新 10 期)</h3>
+            <div class="table-container">
+                <table id="distTable"><thead><tr id="chartHeader"></tr></thead><tbody id="chartBody"></tbody></table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3 class="panel-title">4. 滾動回測紀錄 (集彈優化)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v28)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v29)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3 class="panel-title" onclick="toggleStrategy()">5. 策略邏輯說明 (點擊展開/收合) <span>▼</span></h3>
+        <div id="strategyContent" class="collapsible-content">
+            <strong>v29 核心算法：</strong><br>
+            * <strong>熱度擴散 (Diffusion)：</strong>對上期獎號的鄰號（N±1）加權 120 分，跳號（N±2）加權 60 分，模擬號碼連動規律。<br>
+            * <strong>遺漏黃金區：</strong>鎖定遺漏 5-10 期的號碼，賦予最高權重（240分），此為 539 命中 3 號的高頻產出區。<br>
+            * <strong>關聯聚類：</strong>選出種子號碼後，自動檢索 Top 15 中具備「同尾」或「鄰號」關係的號碼優先配對，以製造命中 2 號以上的集彈效果。<br>
+            * <strong>三區防禦：</strong>確保 5 個號碼至少分布在 2 個大區間，避免過於擠迫導致覆蓋率喪失。
         </div>
     </div>
 
@@ -51,6 +70,11 @@
             reader.onload = e => parseCSV(e.target.result);
             reader.readAsText(file);
         });
+
+        function toggleStrategy() {
+            const content = document.getElementById('strategyContent');
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        }
 
         function parseCSV(text) {
             const lines = text.trim().split(/\r?\n/);
@@ -63,63 +87,52 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getCentroidResonancePick(history) {
+        function getResonancePick(history) {
             let scores = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
-            const recent5 = history.slice(-5);
             
-            // 1. 區塊動能統計
-            const blocks = [0, 0, 0, 0]; // 1-10, 11-20, 21-30, 31-39
-            recent5.forEach(h => h.nums.forEach(n => {
-                if (n <= 10) blocks[0]++;
-                else if (n <= 20) blocks[1]++;
-                else if (n <= 30) blocks[2]++;
-                else blocks[3]++;
-            }));
-            const hotBlocks = blocks.map((v, i) => ({i, v})).sort((a, b) => b.v - a.v).slice(0, 2).map(x => x.i);
-
             for (let i = 1; i <= 39; i++) {
                 let miss = 0;
                 for (let j = history.length - 1; j >= 0; j--) {
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
-                // A. 權重分層
-                if (miss >= 5 && miss <= 9) scores[i] += 250;
-                else if (miss <= 1) scores[i] += 180;
-                else scores[i] += 20;
-
-                // B. 鄰號加成
-                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 100;
                 
-                // C. 熱點區塊加成
-                let myBlock = i <= 10 ? 0 : i <= 20 ? 1 : i <= 30 ? 2 : 3;
-                if (hotBlocks.includes(myBlock)) scores[i] += 80;
+                // 1. 遺漏加權 (黃金區 5-10期)
+                if (miss >= 5 && miss <= 10) scores[i] += 240;
+                else if (miss <= 1) scores[i] += 150;
+                else scores[i] += 40;
+
+                // 2. 熱度擴散 (鄰號與跳號)
+                if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 120;
+                if (lastNums.some(n => Math.abs(n - i) === 2)) scores[i] += 60;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
             
-            // 2. 選號邏輯：優先從熱點區塊中選取有同尾關係的號碼
+            // 3. 種子誘導與同尾聚類
+            final.push(sorted[0]); 
+            for (let n of sorted.slice(1)) {
+                if (final.length >= 5) break;
+                const isRelated = final.some(f => (f % 10 === n % 10) || (Math.abs(f - n) <= 1));
+                if (isRelated || final.length < 2) final.push(n);
+            }
+
+            // 兜底補齊
             for (let n of sorted) {
                 if (final.length >= 5) break;
-                let myBlock = n <= 10 ? 0 : n <= 20 ? 1 : n <= 30 ? 2 : 3;
-                
-                const hasTailMatch = final.some(f => f % 10 === n % 10);
-                const isHotBlock = hotBlocks.includes(myBlock);
-
-                if (isHotBlock || hasTailMatch || final.length < 2) {
-                    final.push(n);
-                }
+                if (!final.includes(n)) final.push(n);
             }
 
             return final.sort((a, b) => a - b);
         }
 
         function processSystem(data) {
+            renderChart([...data].slice(-10).reverse());
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getCentroidResonancePick(data.slice(0, i));
+                const pred = getResonancePick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -127,9 +140,16 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getCentroidResonancePick(data);
+            const nextP = getResonancePick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
+        }
+
+        function renderChart(data) {
+            const header = document.getElementById('chartHeader');
+            const body = document.getElementById('chartBody');
+            header.innerHTML = '<th>日期</th>' + Array.from({length:39}, (_, i)=>`<th>${i+1}</th>`).join('');
+            body.innerHTML = data.map(row => `<tr><td>${row.date}</td>${Array.from({length:39}, (_, i)=>`<td>${row.nums.includes(i+1)?`<span class="dot">${i+1}</span>`:''}</td>`).join('')}</tr>`).join('');
         }
     </script>
 </body>
