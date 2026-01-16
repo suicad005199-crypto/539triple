@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 鄰域交叉系統 - 優化 v27</title>
+    <title>AI 雙重心熱點系統 - 優化 v28</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -23,29 +23,21 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v27 鄰域交叉版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v28 雙重心熱點版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
     <div id="analysisSection" style="display:none;">
         <div class="panel">
-            <h3 class="panel-title">2. AI 鄰域共振預測 (下一期建議)</h3>
+            <h3 class="panel-title">2. AI 雙重心熱點預測 (下一期建議)</h3>
             <div id="predictionResults"></div>
         </div>
 
         <div class="panel">
-            <h3 class="panel-title">3. 三區分布統計</h3>
-            <div id="zoneStats" style="font-size: 14px; color: #666; margin-bottom: 10px;"></div>
-            <div class="table-container">
-                <table><thead><tr id="chartHeader"></tr></thead><tbody id="chartBody"></tbody></table>
-            </div>
-        </div>
-
-        <div class="panel">
-            <h3 class="panel-title">4. 滾動回測 (平衡集彈與覆蓋)</h3>
+            <h3 class="panel-title">3. 滾動回測 (目標：找回命中 3 號)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v27)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v28)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -71,46 +63,51 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getZonalResonancePick(history) {
+        function getCentroidResonancePick(history) {
             let scores = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
+            const recent5 = history.slice(-5);
             
+            // 1. 區塊動能統計
+            const blocks = [0, 0, 0, 0]; // 1-10, 11-20, 21-30, 31-39
+            recent5.forEach(h => h.nums.forEach(n => {
+                if (n <= 10) blocks[0]++;
+                else if (n <= 20) blocks[1]++;
+                else if (n <= 30) blocks[2]++;
+                else blocks[3]++;
+            }));
+            const hotBlocks = blocks.map((v, i) => ({i, v})).sort((a, b) => b.v - a.v).slice(0, 2).map(x => x.i);
+
             for (let i = 1; i <= 39; i++) {
                 let miss = 0;
                 for (let j = history.length - 1; j >= 0; j--) {
                     if (!history[j].nums.includes(i)) miss++; else break;
                 }
-                // A. 遺漏權重：修正黃金回歸至 5-9 期
-                if (miss >= 5 && miss <= 9) scores[i] += 210;
-                else if (miss <= 1) scores[i] += 160;
-                else if (miss >= 12) scores[i] += 70; // 冷號適度參與
-                else scores[i] += 30;
+                // A. 權重分層
+                if (miss >= 5 && miss <= 9) scores[i] += 250;
+                else if (miss <= 1) scores[i] += 180;
+                else scores[i] += 20;
 
-                // B. 鄰域交叉：熱號周邊加權
+                // B. 鄰號加成
                 if (lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 100;
-                if (lastNums.some(n => Math.abs(n - i) === 2)) scores[i] += 50;
+                
+                // C. 熱點區塊加成
+                let myBlock = i <= 10 ? 0 : i <= 20 ? 1 : i <= 30 ? 2 : 3;
+                if (hotBlocks.includes(myBlock)) scores[i] += 80;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
             
-            // 採用區間強制分配規則 (至少每個區間一個，剩餘兩個由高分遞補)
-            const zones = [[1,13], [14,26], [27,39]];
-            
-            // 1. 每個區間各取最高分的一號 (保證覆蓋率)
-            zones.forEach(z => {
-                const bestInZone = sorted.find(n => n >= z[0] && n <= z[1]);
-                if (bestInZone) final.push(bestInZone);
-            });
-
-            // 2. 針對已選號碼進行同尾誘導，補充剩餘 2 個名額 (衝刺 3 號)
+            // 2. 選號邏輯：優先從熱點區塊中選取有同尾關係的號碼
             for (let n of sorted) {
                 if (final.length >= 5) break;
-                if (final.includes(n)) continue;
+                let myBlock = n <= 10 ? 0 : n <= 20 ? 1 : n <= 30 ? 2 : 3;
                 
-                // 優先選擇與已選號碼「同尾」的號碼
                 const hasTailMatch = final.some(f => f % 10 === n % 10);
-                if (hasTailMatch || final.length < 4) {
+                const isHotBlock = hotBlocks.includes(myBlock);
+
+                if (isHotBlock || hasTailMatch || final.length < 2) {
                     final.push(n);
                 }
             }
@@ -119,11 +116,10 @@
         }
 
         function processSystem(data) {
-            renderChart([...data].slice(-10).reverse());
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getZonalResonancePick(data.slice(0, i));
+                const pred = getCentroidResonancePick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -131,16 +127,9 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getZonalResonancePick(data);
+            const nextP = getCentroidResonancePick(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
-        }
-
-        function renderChart(data) {
-            const header = document.getElementById('chartHeader');
-            const body = document.getElementById('chartBody');
-            header.innerHTML = '<th>日期</th>' + Array.from({length:39}, (_, i)=>`<th>${i+1}</th>`).join('');
-            body.innerHTML = data.map(row => `<tr><td>${row.date}</td>${Array.from({length:39}, (_, i)=>`<td>${row.nums.includes(i+1)?`<span class="dot">${i+1}</span>`:''}</td>`).join('')}</tr>`).join('');
         }
     </script>
 </body>
