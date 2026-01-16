@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 三維熱點矩陣系統 - 優化 v51</title>
+    <title>AI 共振強化系統 - 優化 v52</title>
     <style>
         :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -22,7 +22,7 @@
 <body>
 
     <div class="panel">
-        <h3 class="panel-title">1. 數據解析 (v51 三維矩陣版)</h3>
+        <h3 class="panel-title">1. 數據解析 (v52 強化共振版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
@@ -36,7 +36,7 @@
             <h3 class="panel-title">3. 滾動回測 (目標：衝刺命中 3 號)</h3>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v51)</th><th>命中</th></tr></thead>
+                    <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合 (v52)</th><th>命中</th></tr></thead>
                     <tbody id="backtestBody"></tbody>
                 </table>
             </div>
@@ -62,13 +62,13 @@
             if (data.length > 0) processSystem(data);
         }
 
-        function getMatrixPick(history) {
+        function getResonanceV52(history) {
             let scores = Array(40).fill(0);
             let missArr = Array(40).fill(0);
             const lastNums = history[history.length - 1].nums;
-            const recentHistory = history.slice(-5).flatMap(h => h.nums);
+            const recentHistory = history.slice(-7).flatMap(h => h.nums);
             
-            // 尾數頻次統計
+            // 尾數頻次
             let tailCount = Array(10).fill(0);
             recentHistory.forEach(n => tailCount[n % 10]++);
 
@@ -79,41 +79,38 @@
                 }
                 missArr[i] = m;
 
-                // 核心加權
-                if (m === 1) scores[i] += 520;       // 斜連
-                else if (m === 0) scores[i] += 300;  // 連莊
-                else if (m >= 5 && m <= 9) scores[i] += 420; // 黃金反彈
-                else if (m >= 12) scores[i] = 0;     // 過濾長冷
-                else scores[i] += 100;
+                // 權重體系
+                if (m === 1) scores[i] += 550;       // 強斜連
+                else if (m === 0) scores[i] += 320;  // 連莊
+                else if (m >= 5 && m <= 9) scores[i] += 450; // 黃金反彈
+                else if (m >= 13) scores[i] = 0;     // 排除長冷
+                else scores[i] += 80;
 
-                // 共振加成 (鄰號與尾數)
-                if (lastNums.some(ln => Math.abs(ln - i) === 1)) scores[i] += 150;
-                scores[i] += tailCount[i % 10] * 25;
+                // 鄰號滑動動力
+                if (lastNums.some(ln => Math.abs(ln - i) === 1)) scores[i] += 180;
+                scores[i] += tailCount[i % 10] * 30;
             }
 
             let sorted = Array.from({length: 39}, (_, i) => i + 1).sort((a, b) => scores[b] - scores[a]);
             let final = [];
             
-            // 1. 選取兩大異區核心 (確保基本覆蓋)
-            final.push(sorted[0]);
-            let core2 = sorted.find(n => Math.abs(n - final[0]) > 8);
-            if (core2) final.push(core2);
+            // 1. 強制分層選號
+            // 層級 A: 最強斜連/連莊 (選 2)
+            let layerA = sorted.filter(n => missArr[n] <= 1);
+            for(let i=0; i<2 && i<layerA.length; i++) final.push(layerA[i]);
 
-            // 2. 飽和填充：尋找與核心共振最強的伴隨號
+            // 層級 B: 最強黃金反彈 (選 2)
+            let layerB = sorted.filter(n => !final.includes(n) && missArr[n] >= 5 && missArr[n] <= 9);
+            for(let i=0; i<2 && i<layerB.length; i++) final.push(layerB[i]);
+
+            // 2. 飽和共振填充 (選 1)
             for (let n of sorted) {
                 if (final.length >= 5) break;
                 if (final.includes(n)) continue;
 
-                // 計算共振值 (同尾+2, 鄰號+1)
-                let resonance = final.reduce((acc, f) => {
-                    let r = 0;
-                    if (f % 10 === n % 10) r += 2;
-                    if (Math.abs(f - n) === 1) r += 1;
-                    return acc + r;
-                }, 0);
-
-                // 優先選擇具備連動性的號碼
-                if (resonance >= 2 || final.length >= 4) final.push(n);
+                // 檢查是否與已有號碼同尾或連號
+                let hasRes = final.some(f => (f % 10 === n % 10) || (Math.abs(f - n) === 1));
+                if (hasRes || final.length >= 4) final.push(n);
             }
 
             return final.sort((a, b) => a - b);
@@ -123,7 +120,7 @@
             const tbody = document.getElementById('backtestBody');
             tbody.innerHTML = '';
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getMatrixPick(data.slice(0, i));
+                const pred = getResonanceV52(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -131,7 +128,7 @@
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const nextP = getMatrixPick(data);
+            const nextP = getResonanceV52(data);
             document.getElementById('predictionResults').innerHTML = nextP.map(n=>`<span class="num-badge" style="font-size:1.2rem">${n}</span>`).join('');
             document.getElementById('analysisSection').style.display = 'block';
         }
