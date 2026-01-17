@@ -2,67 +2,72 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 量子能階系統 - v102</title>
+    <title>AI 雙軸共振系統 - v103</title>
     <style>
         :root { --p: #2c3e50; --s: #27ae60; --b: #f4f7f6; --a: #e74c3c; --h: #f1c40f; }
-        body { font-family: sans-serif; background: var(--b); padding: 20px; color: var(--p); line-height: 1.5; }
+        body { font-family: sans-serif; background: var(--b); padding: 20px; color: var(--p); font-size: 14px; }
         .panel { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .num-badge { display: inline-block; background: var(--p); color: white; border-radius: 4px; padding: 4px 15px; margin: 3px; font-weight: bold; }
-        .hit-badge { background: var(--s) !important; box-shadow: 0 0 10px var(--s); }
-        .best-one { background: var(--h) !important; color: #000 !important; border: 2px solid #000; }
+        .num-badge { display: inline-block; background: var(--p); color: white; border-radius: 4px; padding: 4px 12px; margin: 2px; font-weight: bold; }
+        .hit-badge { background: var(--s) !important; box-shadow: 0 0 8px var(--s); }
+        .best-one { background: var(--h) !important; color: #000 !important; border: 2px solid #000; box-shadow: 0 0 10px var(--h); }
         
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
-        th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 6px 2px; text-align: center; font-size: 0.75rem; }
         th { background: var(--p); color: white; }
-        .best-hit { background-color: #fffde7 !important; border: 2px solid var(--h) !important; }
-
-        /* 連號分布表格 */
-        .dist-table { width: 100%; table-layout: fixed; }
-        .dist-table td { font-size: 0.8rem; height: 30px; border: 1px solid #ddd; }
-        .active-cell { background: var(--a); color: white; font-weight: bold; }
+        .best-hit { background-color: #fffde7 !important; font-weight: bold; }
+        
+        /* 連號分布矩陣樣式 */
+        .dist-cell { width: 22px; }
+        .active-num { background: var(--a) !important; color: white !important; font-weight: bold; border-radius: 50%; }
+        .date-col { width: 85px; background: #f9f9f9; font-weight: bold; }
 
         /* 收合組件 */
-        .collapse-btn { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; margin-top: 10px; }
+        .collapse-btn { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; }
         .collapse-content { display: none; padding: 15px; border: 1px solid #ddd; border-top: none; background: white; border-radius: 0 0 8px 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3>1. 數據解析 (v102 量子能階版)</h3>
+        <h3>1. 數據解析 (v103 雙軸共振版)</h3>
         <input type="file" id="csvFile" accept=".csv">
-        
-        <div id="distSection" style="display:none; margin-top:20px;">
-            <strong>【連號分布圖】</strong>
-            <table class="dist-table" id="distTable"></table>
-        </div>
     </div>
 
     <div id="resSection" style="display:none;">
         <div class="panel">
-            <h3>2. AI 核心預測 (衝刺 40% 命中 3)</h3>
-            <div id="bestOneSection" style="margin-bottom:15px; padding:10px; border-left:5px solid var(--h); background:#fffef0;">
-                <strong>★ 本期最優號碼：</strong> <span id="theOneBadge"></span>
+            <h3>2. AI 核心預測 (目標：40% 命中 3)</h3>
+            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 15px; padding: 15px; background: #fffdf0; border: 2px solid var(--h); border-radius: 8px;">
+                <div><strong>★ 本期唯一最優號碼：</strong><br><span id="theOneBadge" style="font-size: 1.8rem;"></span></div>
+                <div style="border-left: 1px solid #ddd; padding-left: 20px;">
+                    <strong>核心共振組合：</strong><div id="predResult"></div>
+                </div>
             </div>
-            <div id="predResult"></div>
+        </div>
+
+        <div class="panel" style="overflow-x: auto;">
+            <h3>3. 連號分布矩陣 (預測號碼空間分佈)</h3>
+            <table id="distMatrix">
+                <thead><tr id="matrixHeader"></tr></thead>
+                <tbody id="matrixBody"></tbody>
+            </table>
         </div>
 
         <div class="panel">
-            <h3>3. 滾動回測 (量子坍縮檢驗)</h3>
+            <h3>4. 滾動回測 (動能坍縮紀錄)</h3>
             <table id="btTable">
-                <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合</th><th>命中</th></tr></thead>
+                <thead><tr><th style="width:100px;">日期</th><th>真實獎號</th><th>預測組合</th><th style="width:60px;">命中</th></tr></thead>
                 <tbody id="btBody"></tbody>
             </table>
         </div>
     </div>
 
     <div class="panel">
-        <button class="collapse-btn" onclick="toggleCollapse()">▼ 策略邏輯說明 (v102 量子能階演算法)</button>
+        <button class="collapse-btn" onclick="toggleCollapse()">▼ 策略邏輯說明 (v103 雙軸共振演算法)</button>
         <div id="strategyDetail" class="collapse-content">
-            <strong>1. 最優號碼 (The One)：</strong> 系統從斜連權重與同尾熱度中計算出全域能量最高點，作為預測組合的核心錨點。<br>
-            <strong>2. 能階共振：</strong> 圍繞最優號碼配置其物理鄰接號與同尾號，不再採用死板的連號，而是改用「熱點吸引」模式。<br>
-            <strong>3. 表格化監控：</strong> 透過連號分布表視覺化 1-39 號的分佈情況，紅格代表預測選取的號碼，協助檢視區間集中度。<br>
-            <strong>4. 容錯修復：</strong> 恢復遺漏 2-4 期的權重至 400，解決 v101 因過度純化導致的跳號漏失問題。
+            <strong>1. 最優號碼錨定 (The One Core)：</strong> 系統計算全域最高動能點（斜連+鄰號權重總和），以此號為核心，強制在半徑 ±2 或同尾範圍內配置「衛星號」，確保物理連動。<br>
+            <strong>2. 雙軸共振：</strong> 結合「時間軸 (斜連)」與「空間軸 (同尾)」，將原本分散的號碼強行壓縮至兩個高效能帶。<br>
+            <strong>3. 分布矩陣監控：</strong> 橫向 1-39 號碼矩陣，可清楚觀察每一期 AI 預測號碼的「集彈點」，若紅點在某一區密集出現，即為「坍縮三星」徵兆。<br>
+            <strong>4. 動能優化：</strong> L1 斜連加權提升至 2200，專門對付 539 近期強烈的連莊與斜連趨勢。
         </div>
     </div>
 
@@ -78,49 +83,54 @@
             content.style.display = content.style.display === 'block' ? 'none' : 'block';
         }
 
-        function buildDistTable(nums) {
-            const table = document.getElementById('distTable');
-            table.innerHTML = '';
-            let count = 1;
-            for(let r=0; r<4; r++) {
-                let tr = document.createElement('tr');
-                for(let c=0; c<10; c++) {
-                    let td = document.createElement('td');
-                    if(count <= 39) {
-                        td.innerText = count;
-                        if(nums.includes(count)) td.className = 'active-cell';
-                        count++;
-                    }
-                    tr.appendChild(td);
-                }
-                table.appendChild(tr);
+        function initMatrixHeader() {
+            const header = document.getElementById('matrixHeader');
+            header.innerHTML = '<th class="date-col">日期 \\ 號碼</th>';
+            for(let i=1; i<=39; i++) {
+                let th = document.createElement('th');
+                th.className = 'dist-cell';
+                th.innerText = i;
+                header.appendChild(th);
             }
-            document.getElementById('distSection').style.display = 'block';
         }
 
         function process(text) {
             const rows = text.trim().split('\n').map(r => r.split(','));
             const data = rows.filter(r => !isNaN(r[1])).map(r => ({ date: r[0], nums: r.slice(1, 6).map(Number).sort((a,b)=>a-b) }));
+            
+            initMatrixHeader();
             const tbody = document.getElementById('btBody');
-            tbody.innerHTML = '';
+            const mBody = document.getElementById('matrixBody');
+            tbody.innerHTML = ''; mBody.innerHTML = '';
             
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const predObj = getV102Pick(data.slice(0, i));
+                const predObj = getV103Pick(data.slice(0, i));
                 const hits = predObj.res.filter(n => data[i].nums.includes(n));
+                
+                // 填充回測表
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
-                tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${predObj.res.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''} ${n===predObj.one?'best-one':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
+                tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${predObj.res.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''} ${n===predObj.one?'best-one':''}">${n}</span>`).join('')}</td><td style="font-size:1.2rem; font-weight:bold;">${hits.length}</td>`;
                 tbody.appendChild(tr);
+
+                // 填充分佈矩陣
+                const mTr = document.createElement('tr');
+                let mHtml = `<td class="date-col">${data[i].date}</td>`;
+                for(let n=1; n<=39; n++) {
+                    mHtml += `<td class="${predObj.res.includes(n)?'active-num':''}">${predObj.res.includes(n)?n:''}</td>`;
+                }
+                mTr.innerHTML = mHtml;
+                mBody.appendChild(mTr);
             }
             
-            const final = getV102Pick(data);
+            const final = getV103Pick(data);
             document.getElementById('theOneBadge').innerHTML = `<span class="num-badge best-one">${final.one}</span>`;
             document.getElementById('predResult').innerHTML = final.res.map(n=>`<span class="num-badge ${n===final.one?'best-one':''}" style="font-size:1.4rem">${n}</span>`).join('');
-            buildDistTable(final.res);
+            
             document.getElementById('resSection').style.display = 'block';
         }
 
-        function getV102Pick(hist) {
+        function getV103Pick(hist) {
             let sc = Array(40).fill(0), ms = Array(40).fill(0);
             const last = hist[hist.length-1].nums, recent = hist.slice(-8).flatMap(h=>h.nums);
             let tf = Array(10).fill(0); recent.forEach(n=>tf[n%10]++);
@@ -128,29 +138,28 @@
             for (let i=1; i<=39; i++) {
                 let m = 0; for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) m++; else break; }
                 ms[i] = m;
-                if(m===1) sc[i]+=2000; 
-                else if(m>=5 && m<=9) sc[i]+=1900; 
-                else if(m>=2 && m<=4) sc[i]+=400; // 修復緩衝區
-                else if(m===0) sc[i]+=550; 
+                if(m===1) sc[i]+=2200; // L1 斜連強壓
+                else if(m>=5 && m<=9) sc[i]+=2100; // 反彈動能
+                else if(m>=2 && m<=4) sc[i]+=500; 
+                else if(m===0) sc[i]+=600; 
                 else if(m>=11) sc[i]=0; 
                 else sc[i]+=100;
 
-                sc[i] += tf[i%10]*300; 
-                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=500;
+                sc[i] += tf[i%10]*320; 
+                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=700; // 鄰號連動
             }
 
             let sorted = Array.from({length:39},(_,i)=>i+1).sort((a,b)=>sc[b]-sc[a]);
             let res = [], one = sorted[0];
+            res.push(one);
             
-            res.push(one); // 最優號碼
-            
-            // 核心共振 (2顆)
-            let mate1 = sorted.find(n => !res.includes(n) && (n%10 === one%10 || Math.abs(n-one)===1));
-            if(mate1) res.push(mate1);
-            let mate2 = sorted.find(n => !res.includes(n) && (ms[n]===1));
-            if(mate2) res.push(mate2);
+            // 雙軸連鎖：優先找最優號碼的 鄰號 或 同尾 (確保三星坍縮)
+            let link1 = sorted.find(n => !res.includes(n) && (Math.abs(n-one)<=2));
+            if(link1) res.push(link1);
+            let link2 = sorted.find(n => !res.includes(n) && n%10 === one%10);
+            if(link2) res.push(link2);
 
-            // 區間集彈 (2顆)
+            // 補足位：尋找跨區間的高分號
             while (res.length < 5) {
                 let next = sorted.find(n => !res.includes(n));
                 if(next) res.push(next);
