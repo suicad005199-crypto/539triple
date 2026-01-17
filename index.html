@@ -2,23 +2,23 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 雙軌共振系統 - v104</title>
+    <title>AI 三維坍縮系統 - v105</title>
     <style>
         :root { --p: #2c3e50; --s: #27ae60; --b: #f4f7f6; --a: #e74c3c; --h: #f1c40f; }
         body { font-family: sans-serif; background: var(--b); padding: 20px; color: var(--p); font-size: 13px; }
         .panel { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         .num-badge { display: inline-block; background: var(--p); color: white; border-radius: 4px; padding: 4px 10px; margin: 2px; font-weight: bold; }
         .hit-badge { background: var(--s) !important; box-shadow: 0 0 8px var(--s); }
-        .best-one { background: var(--h) !important; color: #000 !important; border: 2px solid #000; box-shadow: 0 0 10px var(--h); }
+        .best-one { background: var(--h) !important; color: #000 !important; border: 2px solid #000; }
         
         table { width: 100%; border-collapse: collapse; background: white; table-layout: fixed; }
         th, td { border: 1px solid #ddd; padding: 5px 1px; text-align: center; font-size: 0.7rem; }
         th { background: var(--p); color: white; }
         .best-hit { background-color: #fffde7 !important; font-weight: bold; }
         
-        /* 矩陣樣式 */
+        /* 矩陣增強 */
         .date-col { width: 80px; background: #f9f9f9; font-weight: bold; }
-        .active-num { background: #ffebee; color: var(--a); font-weight: bold; }
+        .active-num { background: #fff5f5; color: var(--a); font-weight: bold; }
         .hit-num { background: var(--s) !important; color: white !important; }
 
         .collapse-btn { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; }
@@ -28,7 +28,7 @@
 <body>
 
     <div class="panel">
-        <h3>1. 數據解析 (v104 雙軌共振版)</h3>
+        <h3>1. 數據解析 (v105 三維坍縮版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
@@ -38,13 +38,13 @@
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px; padding: 15px; background: #fffdf0; border: 2px solid var(--h); border-radius: 8px;">
                 <div><strong>★ 本期唯一最優號碼：</strong><br><span id="theOneBadge" style="font-size: 1.8rem;"></span></div>
                 <div style="border-left: 2px solid #ddd; padding-left: 15px;">
-                    <strong>雙軌共振組合：</strong><div id="predResult"></div>
+                    <strong>三維坍縮組合：</strong><div id="predResult"></div>
                 </div>
             </div>
         </div>
 
         <div class="panel" style="overflow-x: auto;">
-            <h3>3. 連號分布矩陣 (綠色代表該期預測命中)</h3>
+            <h3>3. 連號分布矩陣 (橫向空間分佈)</h3>
             <table id="distMatrix">
                 <thead><tr id="matrixHeader"></tr></thead>
                 <tbody id="matrixBody"></tbody>
@@ -52,8 +52,8 @@
         </div>
 
         <div class="panel">
-            <h3>4. 滾動回測紀錄</h3>
-            <table>
+            <h3>4. 滾動回測與命中檢驗</h3>
+            <table id="btTable">
                 <thead><tr><th style="width:90px;">日期</th><th>真實獎號</th><th>預測組合</th><th style="width:50px;">命中</th></tr></thead>
                 <tbody id="btBody"></tbody>
             </table>
@@ -61,13 +61,11 @@
     </div>
 
     <div class="panel">
-        <button class="collapse-btn" onclick="toggleCollapse()">▼ v104 策略邏輯詳解</button>
+        <button class="collapse-btn" onclick="toggleCollapse()">▼ v105 策略邏輯說明</button>
         <div id="strategyDetail" class="collapse-content">
-            <strong>1. 最優號碼 (The One)：</strong> 鎖定全域評分第一號碼，為整組策略的穩定點。<br>
-            <strong>2. 雙軌共振 (Dual-Track)：</strong> <br>
-            &nbsp;&nbsp;&nbsp;&nbsp;• 軌道 A：鎖定核心號周邊（鄰號+同尾），應對局部坍縮。<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;• 軌道 B：選取跨區間的高能階反彈號碼，解決分散開獎時命中率掛蛋的問題。<br>
-            <strong>3. 矩陣監控：</strong> 表格化日期 vs 1-39 號碼，紅點標註預測，命中後點亮為綠色，直觀檢測 AI 捕獲精度。
+            <strong>1. 三點核心鎖定：</strong> 以最優號碼為頂點，強制在「同尾軸」與「鄰號軸」配置輔助球，確保三星連動的物理基礎。<br>
+            <strong>2. 空間坍縮加壓：</strong> 提高 L5-9 反彈號權重 (2400)，專攻近期 539 頻繁出現的「冷熱交替」三星盤勢。<br>
+            <strong>3. 矩陣視覺化：</strong> 透過 1-39 分佈矩陣觀測集彈規律，若紅點在某一十位數區間內連續三期集中，即為該區間大爆發的前兆。
         </div>
     </div>
 
@@ -96,23 +94,19 @@
         function process(text) {
             const rows = text.trim().split('\n').map(r => r.split(','));
             const data = rows.filter(r => !isNaN(r[1])).map(r => ({ date: r[0], nums: r.slice(1, 6).map(Number).sort((a,b)=>a-b) }));
-            
             initMatrixHeader();
             const btBody = document.getElementById('btBody');
             const mBody = document.getElementById('matrixBody');
             btBody.innerHTML = ''; mBody.innerHTML = '';
             
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const predObj = getV104Pick(data.slice(0, i));
+                const predObj = getV105Pick(data.slice(0, i));
                 const hits = predObj.res.filter(n => data[i].nums.includes(n));
-                
-                // 回測表
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${predObj.res.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''} ${n===predObj.one?'best-one':''}">${n}</span>`).join('')}</td><td style="font-size:1.2rem; font-weight:bold;">${hits.length}</td>`;
                 btBody.appendChild(tr);
 
-                // 分佈矩陣
                 const mTr = document.createElement('tr');
                 let mHtml = `<td class="date-col">${data[i].date}</td>`;
                 for(let n=1; n<=39; n++) {
@@ -123,14 +117,13 @@
                 mTr.innerHTML = mHtml;
                 mBody.appendChild(mTr);
             }
-            
-            const final = getV104Pick(data);
+            const final = getV105Pick(data);
             document.getElementById('theOneBadge').innerHTML = `<span class="num-badge best-one">${final.one}</span>`;
             document.getElementById('predResult').innerHTML = final.res.map(n=>`<span class="num-badge ${n===final.one?'best-one':''}" style="font-size:1.4rem">${n}</span>`).join('');
             document.getElementById('resSection').style.display = 'block';
         }
 
-        function getV104Pick(hist) {
+        function getV105Pick(hist) {
             let sc = Array(40).fill(0), ms = Array(40).fill(0);
             const last = hist[hist.length-1].nums, recent = hist.slice(-8).flatMap(h=>h.nums);
             let tf = Array(10).fill(0); recent.forEach(n=>tf[n%10]++);
@@ -138,32 +131,29 @@
             for (let i=1; i<=39; i++) {
                 let m = 0; for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) m++; else break; }
                 ms[i] = m;
-                if(m===1) sc[i]+=2100; // 斜連
-                else if(m>=5 && m<=9) sc[i]+=2300; // 黃金反彈增強
-                else if(m>=2 && m<=4) sc[i]+=600; // 緩衝區修復
-                else if(m===0) sc[i]+=500; 
+                if(m===1) sc[i]+=2300; 
+                else if(m>=5 && m<=9) sc[i]+=2400; // 強化冷熱反彈
+                else if(m>=2 && m<=4) sc[i]+=550; 
+                else if(m===0) sc[i]+=600; 
                 else if(m>=11) sc[i]=0; 
                 else sc[i]+=100;
-
-                sc[i] += tf[i%10]*300; 
-                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=650;
+                sc[i] += tf[i%10]*450; // 同尾加強
+                if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=700;
             }
 
             let sorted = Array.from({length:39},(_,i)=>i+1).sort((a,b)=>sc[b]-sc[a]);
             let res = [], one = sorted[0];
             res.push(one);
             
-            // 軌道 A: 核心共振 (2顆)
-            let orbitA = sorted.find(n => !res.includes(n) && (Math.abs(n-one)<=2 || n%10 === one%10));
-            if(orbitA) res.push(orbitA);
-            let orbitA2 = sorted.find(n => !res.includes(n) && Math.abs(n-one)<=5);
-            if(orbitA2) res.push(orbitA2);
-
-            // 軌道 B: 跨區捕捉 (2顆)
-            let orbitB = sorted.find(n => !res.includes(n) && Math.abs(Math.floor(n/10) - Math.floor(one/10)) >= 1);
-            if(orbitB) res.push(orbitB);
-            let orbitB2 = sorted.find(n => !res.includes(n) && Math.abs(Math.floor(n/10) - Math.floor(one/10)) >= 1);
-            if(orbitB2) res.push(orbitB2);
+            // 三角鎖定邏輯
+            let coreMate = sorted.find(n => !res.includes(n) && (Math.abs(n-one)<=1 || n%10 === one%10));
+            if(coreMate) res.push(coreMate);
+            
+            let crossZone = sorted.find(n => !res.includes(n) && Math.abs(Math.floor(n/10)-Math.floor(one/10)) >= 1);
+            if(crossZone) res.push(crossZone);
+            
+            let crossZoneMate = sorted.find(n => !res.includes(n) && n !== crossZone && Math.abs(n-crossZone)<=2);
+            if(crossZoneMate) res.push(crossZoneMate);
 
             while (res.length < 5) res.push(sorted.find(n => !res.includes(n)));
             return { res: res.sort((a, b) => a - b), one: one };
