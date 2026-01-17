@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 三維坍縮系統 - v105</title>
+    <title>AI 尾數坍縮系統 - v106</title>
     <style>
         :root { --p: #2c3e50; --s: #27ae60; --b: #f4f7f6; --a: #e74c3c; --h: #f1c40f; }
         body { font-family: sans-serif; background: var(--b); padding: 20px; color: var(--p); font-size: 13px; }
@@ -18,7 +18,7 @@
         
         /* 矩陣增強 */
         .date-col { width: 80px; background: #f9f9f9; font-weight: bold; }
-        .active-num { background: #fff5f5; color: var(--a); font-weight: bold; }
+        .active-num { background: #fff5f5; color: var(--a); font-weight: bold; border: 1px solid var(--a); }
         .hit-num { background: var(--s) !important; color: white !important; }
 
         .collapse-btn { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; }
@@ -28,7 +28,7 @@
 <body>
 
     <div class="panel">
-        <h3>1. 數據解析 (v105 三維坍縮版)</h3>
+        <h3>1. 數據解析 (v106 尾數坍縮版)</h3>
         <input type="file" id="csvFile" accept=".csv">
     </div>
 
@@ -38,13 +38,13 @@
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px; padding: 15px; background: #fffdf0; border: 2px solid var(--h); border-radius: 8px;">
                 <div><strong>★ 本期唯一最優號碼：</strong><br><span id="theOneBadge" style="font-size: 1.8rem;"></span></div>
                 <div style="border-left: 2px solid #ddd; padding-left: 15px;">
-                    <strong>三維坍縮組合：</strong><div id="predResult"></div>
+                    <strong>尾數坍縮組合：</strong><div id="predResult"></div>
                 </div>
             </div>
         </div>
 
         <div class="panel" style="overflow-x: auto;">
-            <h3>3. 連號分布矩陣 (橫向空間分佈)</h3>
+            <h3>3. 連號分布矩陣 (日期首列 1-39)</h3>
             <table id="distMatrix">
                 <thead><tr id="matrixHeader"></tr></thead>
                 <tbody id="matrixBody"></tbody>
@@ -52,7 +52,7 @@
         </div>
 
         <div class="panel">
-            <h3>4. 滾動回測與命中檢驗</h3>
+            <h3>4. 滾動回測紀錄</h3>
             <table id="btTable">
                 <thead><tr><th style="width:90px;">日期</th><th>真實獎號</th><th>預測組合</th><th style="width:50px;">命中</th></tr></thead>
                 <tbody id="btBody"></tbody>
@@ -61,11 +61,11 @@
     </div>
 
     <div class="panel">
-        <button class="collapse-btn" onclick="toggleCollapse()">▼ v105 策略邏輯說明</button>
+        <button class="collapse-btn" onclick="toggleCollapse()">▼ v106 策略邏輯詳解</button>
         <div id="strategyDetail" class="collapse-content">
-            <strong>1. 三點核心鎖定：</strong> 以最優號碼為頂點，強制在「同尾軸」與「鄰號軸」配置輔助球，確保三星連動的物理基礎。<br>
-            <strong>2. 空間坍縮加壓：</strong> 提高 L5-9 反彈號權重 (2400)，專攻近期 539 頻繁出現的「冷熱交替」三星盤勢。<br>
-            <strong>3. 矩陣視覺化：</strong> 透過 1-39 分佈矩陣觀測集彈規律，若紅點在某一十位數區間內連續三期集中，即為該區間大爆發的前兆。
+            <strong>1. 尾數坍縮核心：</strong> 鎖定評分第一號碼，並強制提取其同尾號，捕捉 539 高頻率的同尾雙開三星現象。<br>
+            <strong>2. 反彈權重最大化：</strong> 將 L5-9 (遺漏 5-9 期) 權重提升至 2500，重點打擊冷熱交替期的「回溫球」。<br>
+            <strong>3. 空間矩陣監控：</strong> 表格呈現 1-39 分布，紅框表示預測，綠色點亮命中。
         </div>
     </div>
 
@@ -83,7 +83,7 @@
 
         function initMatrixHeader() {
             const header = document.getElementById('matrixHeader');
-            header.innerHTML = '<th class="date-col">日期</th>';
+            header.innerHTML = '<th class="date-col">日期 \\ 號碼</th>';
             for(let i=1; i<=39; i++) {
                 let th = document.createElement('th');
                 th.innerText = i;
@@ -100,7 +100,7 @@
             btBody.innerHTML = ''; mBody.innerHTML = '';
             
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const predObj = getV105Pick(data.slice(0, i));
+                const predObj = getV106Pick(data.slice(0, i));
                 const hits = predObj.res.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
                 if (hits.length >= 3) tr.className = 'best-hit';
@@ -117,13 +117,13 @@
                 mTr.innerHTML = mHtml;
                 mBody.appendChild(mTr);
             }
-            const final = getV105Pick(data);
+            const final = getV106Pick(data);
             document.getElementById('theOneBadge').innerHTML = `<span class="num-badge best-one">${final.one}</span>`;
             document.getElementById('predResult').innerHTML = final.res.map(n=>`<span class="num-badge ${n===final.one?'best-one':''}" style="font-size:1.4rem">${n}</span>`).join('');
             document.getElementById('resSection').style.display = 'block';
         }
 
-        function getV105Pick(hist) {
+        function getV106Pick(hist) {
             let sc = Array(40).fill(0), ms = Array(40).fill(0);
             const last = hist[hist.length-1].nums, recent = hist.slice(-8).flatMap(h=>h.nums);
             let tf = Array(10).fill(0); recent.forEach(n=>tf[n%10]++);
@@ -132,12 +132,11 @@
                 let m = 0; for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) m++; else break; }
                 ms[i] = m;
                 if(m===1) sc[i]+=2300; 
-                else if(m>=5 && m<=9) sc[i]+=2400; // 強化冷熱反彈
-                else if(m>=2 && m<=4) sc[i]+=550; 
+                else if(m>=5 && m<=9) sc[i]+=2500; 
+                else if(m>=2 && m<=4) sc[i]+=450; 
                 else if(m===0) sc[i]+=600; 
                 else if(m>=11) sc[i]=0; 
-                else sc[i]+=100;
-                sc[i] += tf[i%10]*450; // 同尾加強
+                sc[i] += tf[i%10]*500; 
                 if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=700;
             }
 
@@ -145,17 +144,21 @@
             let res = [], one = sorted[0];
             res.push(one);
             
-            // 三角鎖定邏輯
-            let coreMate = sorted.find(n => !res.includes(n) && (Math.abs(n-one)<=1 || n%10 === one%10));
-            if(coreMate) res.push(coreMate);
+            // 尾數坍縮鏈
+            let sameTail = sorted.find(n => !res.includes(n) && n%10 === one%10);
+            if(sameTail) res.push(sameTail);
             
-            let crossZone = sorted.find(n => !res.includes(n) && Math.abs(Math.floor(n/10)-Math.floor(one/10)) >= 1);
-            if(crossZone) res.push(crossZone);
-            
-            let crossZoneMate = sorted.find(n => !res.includes(n) && n !== crossZone && Math.abs(n-crossZone)<=2);
-            if(crossZoneMate) res.push(crossZoneMate);
+            // 鄰域鏈
+            let neighbor = sorted.find(n => !res.includes(n) && Math.abs(n-one)===1);
+            if(neighbor) res.push(neighbor);
 
-            while (res.length < 5) res.push(sorted.find(n => !res.includes(n)));
+            // 跨區動能補位
+            while (res.length < 5) {
+                let next = sorted.find(n => !res.includes(n) && Math.abs(Math.floor(n/10)-Math.floor(one/10)) >= 1);
+                if(!next) next = sorted.find(n => !res.includes(n));
+                res.push(next);
+            }
+
             return { res: res.sort((a, b) => a - b), one: one };
         }
     </script>
