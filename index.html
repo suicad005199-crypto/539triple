@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AI 極限集彈系統 - v100</title>
+    <title>AI 原子坍縮系統 - v101</title>
     <style>
         :root { --p: #2c3e50; --s: #27ae60; --b: #f4f7f6; --a: #e74c3c; }
         body { font-family: sans-serif; background: var(--b); padding: 20px; color: var(--p); }
@@ -14,28 +14,36 @@
         th { background: var(--p); color: white; }
         .best-hit { background-color: #fff176 !important; border: 2px solid #fbc02d !important; font-weight: bold; }
         .hit-count { font-weight: bold; color: var(--s); font-size: 1.5rem; }
-        #distribution { width: 100%; height: 60px; background: #eee; border-radius: 30px; margin: 10px 0; position: relative; overflow: hidden; }
-        .dot { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--a); }
-        .collapse-btn { width: 100%; padding: 10px; background: #eee; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; }
-        .collapse-content { display: none; padding: 15px; border: 1px solid #eee; border-top: none; border-radius: 0 0 8px 8px; font-size: 0.9rem; line-height: 1.6; }
+        
+        /* 分佈圖樣式 */
+        .dist-container { margin-top: 20px; padding: 10px; background: #eee; border-radius: 8px; }
+        #distribution { width: 100%; height: 40px; background: white; border-radius: 20px; position: relative; border: 1px solid #ddd; }
+        .dot { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--a); border-radius: 2px; }
+        
+        /* 收合組件 */
+        .collapse-btn { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: left; transition: 0.3s; }
+        .collapse-btn:hover { background: #34495e; }
+        .collapse-content { display: none; padding: 15px; border: 1px solid #ddd; border-top: none; background: white; border-radius: 0 0 8px 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3>1. 數據解析 (v100 極限集彈版)</h3>
+        <h3>1. 數據解析 (v101 原子坍縮版)</h3>
         <input type="file" id="csvFile" accept=".csv">
-        <div id="distribution-title" style="margin-top:15px; display:none;">連號分佈圖 (紅線為預測號碼位置)</div>
-        <div id="distribution" style="display:none;"></div>
+        <div class="dist-container" id="distBox" style="display:none;">
+            <div style="margin-bottom:5px; font-weight:bold; font-size:0.9rem;">連號分佈圖 (紅線代表預測球號位置)</div>
+            <div id="distribution"></div>
+        </div>
     </div>
 
     <div id="resSection" style="display:none;">
         <div class="panel">
-            <h3>2. AI 核心預測 (衝刺 40% 命中 3)</h3>
+            <h3>2. AI 原子預測 (衝刺 40% 命中 3)</h3>
             <div id="predResult"></div>
         </div>
         <div class="panel">
-            <h3>3. 滾動回測 (集彈力極限檢驗)</h3>
+            <h3>3. 滾動回測 (原子級碰撞檢驗)</h3>
             <table>
                 <thead><tr><th>日期</th><th>真實獎號</th><th>預測組合</th><th>命中</th></tr></thead>
                 <tbody id="btBody"></tbody>
@@ -44,12 +52,12 @@
     </div>
 
     <div class="panel">
-        <button class="collapse-btn" onclick="toggleCollapse()">▼ 策略邏輯說明 (v100 三元坍縮演算法)</button>
+        <button class="collapse-btn" onclick="toggleCollapse()">▼ 策略邏輯說明 (v101 原子級演算法)</button>
         <div id="strategyDetail" class="collapse-content">
-            <strong>1. 三元坍縮核：</strong> 鎖定全域評分第一號碼，強制抓取其鄰號與該區段最強斜連號（遺漏1期），建立物理性連鎖。<br>
-            <strong>2. 雙尾共振：</strong> 識別近期最強動能尾數，配置該尾數中評分前二之號碼，捕捉 539 高頻的「同尾雙開」。<br>
-            <strong>3. 權重極化：</strong> L1 與 L5-9 權重拉升至 2000，將 2-4 期雜訊權重壓低，專注於「即時動能」與「黃金反彈」。<br>
-            <strong>4. 空間分布：</strong> 預測號碼分布在 39 個位置的視覺化投射，確保不產生過度分散。
+            <strong>1. 原子核心 (Atomic Core)：</strong> 放棄跨區分散，鎖定評分第一名號碼及其左右連號（n-1, n+1），強迫產生碰撞連鎖。<br>
+            <strong>2. 同尾引力 (Tail Gravity)：</strong> 從剩餘高分號中強行提取與核心號碼同尾的組合，確保「同區+同尾」的雙重覆蓋。<br>
+            <strong>3. 極致權重 (Hyper-Weight)：</strong> L1 斜連與 L5-9 反彈權重推至 2100，幾乎無視遺漏 2-4 期的號碼，只打最強動能點。<br>
+            <strong>4. 零散度控制：</strong> 透過分佈圖可視化檢測，確保 5 顆球在 39 號空間中不產生隨機漂移。
         </div>
     </div>
 
@@ -68,12 +76,11 @@
         function drawDist(nums) {
             const dist = document.getElementById('distribution');
             dist.innerHTML = '';
-            dist.style.display = 'block';
-            document.getElementById('distribution-title').style.display = 'block';
+            document.getElementById('distBox').style.display = 'block';
             nums.forEach(n => {
                 const dot = document.createElement('div');
                 dot.className = 'dot';
-                dot.style.left = `${(n / 39) * 100}%`;
+                dot.style.left = `${((n-1) / 38) * 100}%`;
                 dist.appendChild(dot);
             });
         }
@@ -85,20 +92,21 @@
             tbody.innerHTML = '';
             
             for (let i = data.length - 1; i > data.length - 11; i--) {
-                const pred = getV100Pick(data.slice(0, i));
+                const pred = getV101Pick(data.slice(0, i));
                 const hits = pred.filter(n => data[i].nums.includes(n));
                 const tr = document.createElement('tr');
+                if (hits.length >= 2) tr.style.borderLeft = "5px solid #27ae60";
                 if (hits.length >= 3) tr.className = 'best-hit';
                 tr.innerHTML = `<td>${data[i].date}</td><td>${data[i].nums}</td><td>${pred.map(n=>`<span class="num-badge ${data[i].nums.includes(n)?'hit-badge':''}">${n}</span>`).join('')}</td><td class="hit-count">${hits.length}</td>`;
                 tbody.appendChild(tr);
             }
-            const finalPred = getV100Pick(data);
+            const finalPred = getV101Pick(data);
             document.getElementById('predResult').innerHTML = finalPred.map(n=>`<span class="num-badge" style="font-size:1.4rem">${n}</span>`).join('');
             drawDist(finalPred);
             document.getElementById('resSection').style.display = 'block';
         }
 
-        function getV100Pick(hist) {
+        function getV101Pick(hist) {
             let sc = Array(40).fill(0), ms = Array(40).fill(0);
             const last = hist[hist.length-1].nums, recent = hist.slice(-8).flatMap(h=>h.nums);
             let tf = Array(10).fill(0); recent.forEach(n=>tf[n%10]++);
@@ -106,35 +114,38 @@
             for (let i=1; i<=39; i++) {
                 let m = 0; for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) m++; else break; }
                 ms[i] = m;
-                // v100 極化權重
-                if(m===1) sc[i]+=2000; 
-                else if(m>=5 && m<=9) sc[i]+=2000; 
-                else if(m>=2 && m<=4) sc[i]+=250; 
-                else if(m===0) sc[i]+=600; 
+                // v101 原子權重
+                if(m===1) sc[i]+=2100; 
+                else if(m>=5 && m<=9) sc[i]+=2100; 
+                else if(m>=2 && m<=4) sc[i]+=100; 
+                else if(m===0) sc[i]+=500; 
                 else if(m>=10) sc[i]=0; 
-                else sc[i]+=100;
+                else sc[i]+=50;
 
-                sc[i] += tf[i%10]*350; 
+                sc[i] += tf[i%10]*300; 
                 if(last.some(ln=>Math.abs(ln-i)===1)) sc[i]+=600;
             }
 
             let sorted = Array.from({length:39},(_,i)=>i+1).sort((a,b)=>sc[b]-sc[a]);
             let res = [];
 
-            // 1. 三元坍縮核 (主攻 10 期命中 3)
-            let core = sorted[0]; res.push(core);
-            let neighbor = sorted.find(n => !res.includes(n) && Math.abs(n-core)===1);
-            if(neighbor) res.push(neighbor);
-            let clusterMate = sorted.find(n => !res.includes(n) && (ms[n]===1 || n%10 === core%10) && Math.abs(Math.floor(n/10)-Math.floor(core/10))===0);
-            if(clusterMate) res.push(clusterMate);
+            // 1. 原子核心 (n, n-1, n+1)
+            let core = sorted[0]; 
+            res.push(core);
+            [core-1, core+1].forEach(n => {
+                if(n >= 1 && n <= 39) res.push(n);
+            });
 
-            // 2. 雙尾共振側翼
-            let tailRank = Array.from({length:10},(_,i)=>({t:i, s:tf[i]})).sort((a,b)=>b.s-a.s);
-            let topTail = tailRank[0].t;
-            let tailMates = sorted.filter(n => !res.includes(n) && n%10 === topTail).slice(0, 2);
+            // 2. 共振衛星 (同尾對)
+            let tailMates = sorted.filter(n => !res.includes(n) && n%10 === core%10).slice(0, 2);
             tailMates.forEach(n => { if(res.length < 5) res.push(n); });
 
-            while (res.length < 5) res.push(sorted.find(n => !res.includes(n)));
+            // 補足位
+            while (res.length < 5) {
+                let next = sorted.find(n => !res.includes(n));
+                if(next) res.push(next);
+            }
+
             return res.sort((a, b) => a - b);
         }
     </script>
