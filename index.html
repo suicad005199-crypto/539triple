@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v208</title>
+    <title>AI 539 數據中心 v209</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ffd60a; --expand: #af52de; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -31,14 +31,14 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v208 - 區間壓制優化)</div>
+        <div class="panel-header">數據注入 (v209 - 動態重心優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 5+3 策略 (目標命中 2 穩定度)</div>
+                <div class="panel-header">Panel 2: 結構預測 (動態重心 5+3)</div>
                 <div id="finalCombo" class="ball-row"></div>
             </div>
             <div class="panel">
@@ -47,7 +47,7 @@
             </div>
         </div>
         <div class="panel">
-            <div class="panel-header">Panel 4: 分區分布矩陣 (雙核熱點分析)</div>
+            <div class="panel-header">Panel 4: 分區走勢 (重心位移分析)</div>
             <div class="matrix-wrapper" id="matrixContainer"></div>
         </div>
     </div>
@@ -68,28 +68,40 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV208Pick(hist) {
+    function getV209Pick(hist) {
         if(hist.length < 5) return {res:[], coreNodes:[], expandNodes:[]};
         const last = hist[hist.length-1].nums;
+        const last3 = hist.slice(-3).flatMap(h => h.nums);
+        
         let pool = [];
-        let zoneScores = [0, 0, 0, 0, 0]; // 5個區間
+        let gravityScores = [0, 0, 0, 0, 0];
 
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            let score = (gap <= 3 ? 50 : 0) + (last.some(ln => Math.abs(ln-i) === 1) ? 30 : 0);
-            let zoneIdx = Math.floor((i-1)/8);
-            if(zoneIdx > 4) zoneIdx = 4;
-            zoneScores[zoneIdx] += score;
-            pool.push({n: i, gap, score, zone: zoneIdx});
+            let score = (gap <= 3 ? 40 : 0) + (last.some(ln => Math.abs(ln-i) === 1) ? 35 : 0);
+            
+            // 計算重心分
+            let zoneIdx = Math.min(Math.floor((i-1)/8), 4);
+            let appearanceInLast3 = last3.filter(n => n === i).length;
+            gravityScores[zoneIdx] += appearanceInLast3 * 10;
+            
+            pool.push({n: i, gap, score, zone: zoneIdx, tail: i % 10});
         }
 
-        // 核心 5 碼：強制選取分值最高的 2 個區間進行壓制
-        let topZones = zoneScores.map((s, i) => ({i, s})).sort((a,b) => b.s - a.s).slice(0, 2).map(z => z.i);
-        let coreNodes = pool.filter(p => topZones.includes(p.zone))
-                            .sort((a,b) => b.score - a.score).slice(0, 5).map(p => p.n);
+        // 核心 5 碼：重心區(3) + 溢出邊緣(2)
+        let topZone = gravityScores.indexOf(Math.max(...gravityScores));
+        let coreNodes = [];
+        
+        // 重心區選 3
+        let zonePool = pool.filter(p => p.zone === topZone).sort((a,b) => b.score - a.score);
+        zonePool.slice(0, 3).forEach(p => coreNodes.push(p.n));
 
-        // 擴展 3 碼：跨區尋找高分遺漏
+        // 溢出區選 2 (選全域分數最高且不在 coreNodes 的)
+        let globalPool = pool.filter(p => !coreNodes.includes(p.n)).sort((a,b) => b.score - a.score);
+        globalPool.slice(0, 2).forEach(p => coreNodes.push(p.n));
+
+        // 擴展 3 碼：專攻遠端遺漏
         let expandNodes = pool.filter(p => !coreNodes.includes(p.n))
                              .sort((a,b) => b.gap - a.gap).slice(0, 3).map(p => p.n);
 
@@ -97,7 +109,7 @@
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV208Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV209Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
             `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':'expand-node'}">${n}</div>`).join('');
 
@@ -105,7 +117,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV208Pick(histUntil);
+            const pred = getV209Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:11px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
