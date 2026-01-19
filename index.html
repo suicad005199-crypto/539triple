@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 539 數據中心 v250</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --res: #007aff; --comp: #af52de; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ff2d55; --buffer: #30d5c8; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; -webkit-font-smoothing: antialiased; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow: hidden; }
@@ -13,8 +13,8 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.res-node { border: 2px solid var(--res); color: var(--res); box-shadow: 0 0 8px rgba(0,122,255,0.4); }
-        .ball.comp-node { border: 2px solid var(--comp); color: var(--comp); }
+        .ball.core-node { border: 2px solid var(--core); color: var(--core); box-shadow: 0 0 8px rgba(255,45,85,0.4); }
+        .ball.buffer-node { border: 2px solid var(--buffer); color: var(--buffer); }
 
         .matrix-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); }
         .matrix-table { width: 100%; border-collapse: collapse; text-align: center; table-layout: fixed; min-width: 1100px; }
@@ -29,16 +29,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v250 - 4 星爆發優化版)</div>
+        <div class="panel-header">數據注入 (v250 - 4 星優化回補版)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 精選 10 碼 (核心坍縮 + 邊界補償)</div>
+                <div class="panel-header">Panel 2: 精選 10 碼 (5核心 + 5緩衝)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">藍框：共振核心 | 紫框：區間補償碼 | 策略：維持 4 星結構深度，強化邊界覆蓋拉回勝率。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">紅框：高壓核心 (衝擊4星) | 青框：緩衝覆蓋 (保底1-2星)</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期回測 (10 碼)</div>
@@ -69,54 +69,57 @@
     });
 
     function getV250Pick(hist) {
-        if(hist.length < 5) return {res:[], resNodes:[], compNodes:[]};
+        if(hist.length < 5) return {res:[], coreNodes:[], bufferNodes:[]};
         const last = hist[hist.length-1].nums;
         const tails = {};
-        hist.slice(-12).forEach(d => d.nums.forEach(n => tails[n%10] = (tails[n%10] || 0) + 1));
+        hist.slice(-5).forEach(d => d.nums.forEach(n => tails[n%10] = (tails[n%10] || 0) + 1));
         const topTail = Number(Object.entries(tails).sort((a,b)=>b[1]-a[1])[0][0]);
-
-        // 區間熱度分析
-        const zones = [0, 0, 0, 0]; // 1-10, 11-20, 21-30, 31-39
-        hist.slice(-3).forEach(d => d.nums.forEach(n => zones[Math.floor((n-1)/10)]++));
-        const coldestZone = zones.indexOf(Math.min(...zones));
 
         let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             let sc = (last.some(ln => Math.abs(ln-i) === 1) ? 50000 : 0) + 
-                     (i%10 === topTail ? 30000 : 0) + 
-                     (gap >= 3 && gap <= 6 ? 20000 : 0) + 
-                     (Math.floor((i-1)/10) === coldestZone ? 15000 : 0);
-            pool.push({n: i, sc, t: i%10, z: Math.floor((i-1)/10), gap});
+                     (i%10 === topTail ? 30000 : 0) + (gap >= 2 && gap <= 5 ? 20000 : 0);
+            pool.push({n: i, sc, t: i%10, gap});
         }
         let sorted = pool.sort((a,b) => b.sc - a.sc);
-        let res = [], resNodes = [], compNodes = [];
+        let res = [], coreNodes = [], bufferNodes = [];
 
-        // 1. 核心坍縮 (4碼) - 鎖定最強引力點
-        let coreBase = sorted[0];
-        res.push(coreBase.n); resNodes.push(coreBase.n);
-        [coreBase.n-1, coreBase.n+1].forEach(n => {
-            if(n >= 1 && n <= 39 && !res.includes(n)) { res.push(n); resNodes.push(n); }
+        // 1. 核心區 (5碼) - 高密度連鎖
+        let base = sorted[0];
+        res.push(base.n); coreNodes.push(base.n);
+        [[1,-1], [1,1], [10,0], [-10,0]].forEach(offset => {
+            let target = base.n + offset[0];
+            if(target >= 1 && target <= 39 && !res.includes(target) && res.length < 5) {
+                res.push(target); coreNodes.push(target);
+            }
         });
-        let cTail = pool.find(n => n.t === coreBase.t && !res.includes(n.n));
-        if(cTail) { res.push(cTail.n); resNodes.push(cTail.n); }
+        while(res.length < 5) { 
+            let p = sorted.find(x => !res.includes(x.n));
+            res.push(p.n); coreNodes.push(p.n);
+        }
 
-        // 2. 邊界補償 (2碼) - 填補冷門區間
-        let czNodes = sorted.filter(p => p.z === coldestZone && !res.includes(p.n)).slice(0, 2);
-        czNodes.forEach(p => { res.push(p.n); compNodes.push(p.n); });
+        // 2. 緩衝區 (5碼) - 最大間距覆蓋
+        let buffers = sorted.filter(p => !res.includes(p.n)).sort((a,b) => {
+            let distA = Math.min(...res.map(rn => Math.abs(rn - a.n)));
+            let distB = Math.min(...res.map(rn => Math.abs(rn - b.n)));
+            return distB - distA; // 優先選離核心最遠的碼
+        });
+        for(let i=0; i<5; i++) {
+            if(buffers[i]) {
+                res.push(buffers[i].n);
+                bufferNodes.push(buffers[i].n);
+            }
+        }
 
-        // 3. 補齊 (4碼) - 溫熱交替
-        let fillers = sorted.filter(p => !res.includes(p.n));
-        while(res.length < 10) res.push(fillers.shift().n);
-
-        return { res: res.sort((a,b)=>a-b), resNodes, compNodes };
+        return { res: res.sort((a,b)=>a-b), coreNodes, bufferNodes };
     }
 
     function render() {
         const fullData = [...state.data], finalPred = getV250Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
-            `<div class="ball ${finalPred.resNodes.includes(n)?'res-node':(finalPred.compNodes.includes(n)?'comp-node':'active')}">${n}</div>`).join('');
+            `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':(finalPred.bufferNodes.includes(n)?'buffer-node':'active')}">${n}</div>`).join('');
         
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
