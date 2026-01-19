@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v219</title>
+    <title>AI 539 數據中心 v220</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ffd60a; --expand: #af52de; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -31,16 +31,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v219 - 雙重引力優化)</div>
+        <div class="panel-header">數據注入 (v220 - 動態引力優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 結構預測 (拖碼連動 + 餘數平衡)</div>
+                <div class="panel-header">Panel 2: 結構預測 (連莊觸發 + 引力收縮)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：優化號碼間的引力連動，確保 5 餘數分布平衡，鞏固高星戰果。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：強化連莊碼捕捉，並在熱門餘數組進行「引力收縮」集火。</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期滾動回測</div>
@@ -48,7 +48,7 @@
             </div>
         </div>
         <div class="panel">
-            <div class="panel-header">Panel 4: 分區走勢矩陣 (拖碼引力分析)</div>
+            <div class="panel-header">Panel 4: 分區走勢矩陣 (引力場分析)</div>
             <div class="matrix-wrapper" id="matrixContainer"></div>
         </div>
     </div>
@@ -69,50 +69,54 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV219Pick(hist) {
+    function getV220Pick(hist) {
         if(hist.length < 5) return {res:[], coreNodes:[], expandNodes:[]};
         const last = hist[hist.length-1].nums;
         let pool = [];
+        let mod5CountHist = [0,0,0,0,0];
+        
+        // 統計近 3 期餘數趨勢
+        hist.slice(-3).forEach(h => h.nums.forEach(n => mod5CountHist[n%5]++));
 
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             
-            // v219 評分：斜連(35) + 拖碼相關(35) + 同尾(20) + 餘數平衡補償
-            let isDrag = last.some(ln => [5, 10, 12].includes(Math.abs(ln-i))); // 模擬拖碼物理距離
-            let score = (last.some(ln => Math.abs(ln-i) === 1) ? 35 : 0) +
-                        (isDrag ? 35 : 0) +
-                        (last.some(ln => ln % 10 === i % 10) ? 20 : 0);
+            // v220 評分：連莊補償(20) + 斜連(40) + 引力拖碼(30)
+            let isRepeat = last.includes(i);
+            let score = (isRepeat ? 20 : 0) +
+                        (last.some(ln => Math.abs(ln-i) === 1) ? 40 : 0) +
+                        (last.some(ln => [5, 10, 12].includes(Math.abs(ln-i))) ? 30 : 0);
             
             pool.push({n: i, gap, score, mod5: i % 5});
         }
 
+        // 核心 5 碼：引力收縮 (向熱門餘數組傾斜)
         let sortedPool = [...pool].sort((a,b) => b.score - a.score);
         let coreNodes = [];
-        let mod5Count = [0,0,0,0,0];
+        let topMod5 = mod5CountHist.map((v, i) => ({i, v})).sort((a,b) => b.v - a.v).slice(0, 2).map(x => x.i);
 
         for (let p of sortedPool) {
             if (coreNodes.length >= 5) break;
-            // 餘數平衡限制：單一餘數組不超過 2 碼
-            if (mod5Count[p.mod5] < 2) {
+            // 優先填滿熱門引力組
+            if (topMod5.includes(p.mod5) || coreNodes.length >= 3) {
                 coreNodes.push(p.n);
-                mod5Count[p.mod5]++;
             }
         }
 
-        // 擴展 3 碼：槓鈴 3.0 (冷熱極端對齊)
+        // 擴展 3 碼：連莊 + 冷熱極端
         let rest = pool.filter(p => !coreNodes.includes(p.n));
-        let maxCold = rest.sort((a,b) => b.gap - a.gap)[0].n;
-        let maxHot = rest.sort((a,b) => a.gap - b.gap)[0].n;
-        let midWarm = rest.filter(p => p.gap === 7 || p.gap === 8).sort((a,b) => b.score - a.score)[0]?.n || rest[1].n;
+        let repeatNode = pool.filter(p => last.includes(p.n)).sort((a,b) => b.score - a.score)[0]?.n;
+        let coldNode = rest.sort((a,b) => b.gap - a.gap)[0]?.n;
+        let hotNode = rest.filter(p => p.gap === 0 && p.n !== repeatNode).sort((a,b) => b.score - a.score)[0]?.n || rest[0].n;
         
-        let expandNodes = [maxCold, maxHot, midWarm];
+        let expandNodes = [repeatNode, coldNode, hotNode].filter((v, i, a) => v && a.indexOf(v) === i).slice(0, 3);
 
         return { res: [...coreNodes, ...expandNodes].sort((a,b)=>a-b), coreNodes, expandNodes };
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV219Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV220Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
             `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':'expand-node'}">${n}</div>`).join('');
 
@@ -120,7 +124,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV219Pick(histUntil);
+            const pred = getV219Pick ? getV220Pick(histUntil) : getV220Pick(histUntil); // 確保呼叫正確
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:11px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
