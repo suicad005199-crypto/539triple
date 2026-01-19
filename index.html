@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v210</title>
+    <title>AI 539 數據中心 v211</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ffd60a; --expand: #af52de; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -31,14 +31,14 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v210 - 回歸 v182 優勢)</div>
+        <div class="panel-header">數據注入 (v211 - 雙重螺旋優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 結構預測 (5 核心 + 3 擴展)</div>
+                <div class="panel-header">Panel 2: 結構預測 (物理連號強化)</div>
                 <div id="finalCombo" class="ball-row"></div>
             </div>
             <div class="panel">
@@ -68,7 +68,7 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV210Pick(hist) {
+    function getV211Pick(hist) {
         if(hist.length < 5) return {res:[], coreNodes:[], expandNodes:[]};
         const last = hist[hist.length-1].nums;
         let pool = [];
@@ -78,28 +78,32 @@
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             let slant = last.some(ln => Math.abs(ln-i) === 1);
             
-            // v182 維度加權
-            let score = 0;
-            if (gap <= 4) score += 40; // 熱碼
-            if (gap >= 5 && gap <= 9) score += 25; // 溫碼
-            if (slant) score += 35; // 斜連
-            
+            // 權重重新分配：斜連(40) + 極熱(30) + 溫碼補償(20)
+            let score = (slant ? 40 : 0) + (gap <= 3 ? 30 : 0) + (gap >= 5 && gap <= 8 ? 20 : 0);
             pool.push({n: i, gap, score});
         }
 
-        // 核心 5 碼：多維配比 (溫熱平衡)
+        // 核心 5 碼：連號綁定算法
         let coreNodes = [];
         let sortedPool = [...pool].sort((a,b) => b.score - a.score);
         
-        // 優先確保斜連碼
-        sortedPool.filter(p => last.some(ln => Math.abs(ln-p.n) === 1)).slice(0, 2).forEach(p => coreNodes.push(p.n));
-        // 補足高分熱碼與溫碼
+        // 尋找最高分的連號對
+        for(let i=0; i<sortedPool.length; i++) {
+            let p1 = sortedPool[i];
+            let p2 = sortedPool.find(p => Math.abs(p.n - p1.n) === 1);
+            if(p2 && !coreNodes.includes(p1.n) && !coreNodes.includes(p2.n)) {
+                coreNodes.push(p1.n, p2.n);
+                break; // 鎖定一組最強連號
+            }
+        }
+        
+        // 補足剩餘核心碼
         for(let p of sortedPool) {
             if(coreNodes.length >= 5) break;
             if(!coreNodes.includes(p.n)) coreNodes.push(p.n);
         }
 
-        // 擴展 3 碼：強化遺漏補償 (v182 強項)
+        // 擴展 3 碼：週期共振 (避開核心，選中性遺漏碼)
         let expandNodes = pool.filter(p => !coreNodes.includes(p.n))
                              .sort((a,b) => b.gap - a.gap).slice(0, 3).map(p => p.n);
 
@@ -107,7 +111,7 @@
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV210Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV211Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
             `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':'expand-node'}">${n}</div>`).join('');
 
@@ -115,7 +119,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV210Pick(histUntil);
+            const pred = getV211Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:11px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
