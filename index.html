@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v224</title>
+    <title>AI 539 數據中心 v225</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ffd60a; --expand: #af52de; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -28,16 +28,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v224 - 冷熱咬合優化)</div>
+        <div class="panel-header">數據注入 (v225 - 波段導航優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 結構預測 (區塊鎖定 + 遺漏共振)</div>
+                <div class="panel-header">Panel 2: 結構預測 (波段過濾 + 餘數矩陣)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：強制高分區域咬合，並依據遺漏配對規律過濾號碼組合。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：依據震盪規律調整位移權重，並使用餘數分佈防止過度群聚。</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期滾動回測</div>
@@ -45,7 +45,7 @@
             </div>
         </div>
         <div class="panel">
-            <div class="panel-header">Panel 4: 分區走勢矩陣 (咬合規律分析)</div>
+            <div class="panel-header">Panel 4: 分區走勢矩陣 (震盪波段分析)</div>
             <div class="matrix-wrapper" id="matrixContainer"></div>
         </div>
     </div>
@@ -66,53 +66,54 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV224Pick(hist) {
+    function getV225Pick(hist) {
         if(hist.length < 5) return {res:[], coreNodes:[], expandNodes:[]};
         const last = hist[hist.length-1].nums;
-        let pool = [];
+        const last2 = hist[hist.length-2].nums;
+        
+        // 計算震盪強度 (上兩期號碼位移距離平均)
+        let totalShift = 0;
+        for(let i=0; i<5; i++) totalShift += Math.abs(last[i] - last2[i]);
+        const isLongWave = (totalShift / 5) > 8;
 
-        // 基礎評分
+        let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            let score = (last.some(ln => ln % 10 === i % 10) ? 40 : 0) +
-                        (last.some(ln => Math.abs(ln-i) === 1) ? 30 : 0) +
-                        (gap === 0 ? 20 : 0); // 連莊加權
-            pool.push({n: i, gap, score});
+            
+            // v225 評分：震盪位移(40) + 同尾連動(30) + 遺漏補償(30)
+            let shiftBonus = isLongWave ? (last.some(ln => Math.abs(ln-i) > 10) ? 40 : 0) 
+                                       : (last.some(ln => Math.abs(ln-i) <= 2) ? 40 : 0);
+            
+            let score = shiftBonus + (last.some(ln => ln % 10 === i % 10) ? 30 : 0) + (gap <= 5 ? 30 : 0);
+            pool.push({n: i, gap, score, mod5: i % 5});
         }
 
-        // 區塊咬合加強：計算 5 碼窗口內的總分
-        pool = pool.map((p, idx) => {
-            let blockScore = 0;
-            for(let j=-2; j<=2; j++) {
-                if(pool[idx+j]) blockScore += pool[idx+j].score;
-            }
-            return {...p, score: p.score + (blockScore * 0.2)};
-        });
-
-        let sorted = [...pool].sort((a,b) => b.score - a.score);
-        
-        // 核心選碼：遺漏共振配對 (嘗試混合熱溫冷)
+        // 核心選碼：餘數矩陣篩選
+        let sorted = pool.sort((a,b) => b.score - a.score);
         let coreNodes = [];
-        let hots = sorted.filter(p => p.gap <= 2).slice(0, 2);
-        let warms = sorted.filter(p => p.gap > 2 && p.gap <= 9).slice(0, 2);
-        let colds = sorted.filter(p => p.gap > 9).slice(0, 1);
-        
-        coreNodes = [...hots, ...warms, ...colds].map(p => p.n);
+        let modCount = [0,0,0,0,0];
+        for(let p of sorted) {
+            if(coreNodes.length >= 5) break;
+            if(modCount[p.mod5] < 2) {
+                coreNodes.push(p.n);
+                modCount[p.mod5]++;
+            }
+        }
 
-        // 擴展碼：邊緣修補 + 二次同尾
+        // 擴展碼：修補防線
         let rest = pool.filter(p => !coreNodes.includes(p.n)).sort((a,b) => b.score - a.score);
         let expandNodes = [
-            rest.find(p => coreNodes.some(cn => cn % 10 === p.n % 10))?.n || rest[0].n, // 強制補上一顆同尾
-            rest.sort((a,b) => b.gap - a.gap)[0].n, // 極冷碼
-            rest[1].n // 補位碼
+            rest.sort((a,b) => b.gap - a.gap)[0].n, // 最大遺漏
+            rest.find(p => last.includes(p.n))?.n || rest[0].n, // 連莊補位
+            rest[1].n
         ];
 
         return { res: [...coreNodes, ...expandNodes].sort((a,b)=>a-b), coreNodes, expandNodes };
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV224Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV225Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
             `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':'expand-node'}">${n}</div>`).join('');
 
@@ -120,7 +121,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV224Pick(histUntil);
+            const pred = getV225Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:11px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
