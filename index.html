@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v141</title>
+    <title>AI 539 數據中心 v142</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
@@ -13,8 +13,9 @@
         .panel-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 8px; font-weight: bold; font-size: 0.9rem; border: 1px solid var(--border); }
-        .ball.group-a { background: var(--primary); color: #000; border: none; }
-        .ball.group-b { border-color: var(--success); color: var(--success); }
+        .ball.hot { background: var(--primary); color: #000; border: none; }
+        .ball.mid { border-color: var(--success); color: var(--success); }
+        .ball.cold { border-color: #ff375f; color: #ff375f; }
         .bt-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2c2c2e; }
         .hit-count { color: var(--success); font-weight: bold; font-size: 1.2rem; }
     </style>
@@ -23,19 +24,19 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入</div>
+        <div class="panel-header">數據注入 (v142)</div>
         <input type="file" id="csvFile" style="width:100%; color:var(--sub);" accept=".csv">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">下期預測 (v141 磁吸 8碼)</div>
-                <p style="font-size:0.7rem; color:var(--sub);">黃: A組(核心) | 綠圈: B組(引力坍縮)</p>
+                <div class="panel-header">下期預測 (黃金 8 碼)</div>
+                <p style="font-size:0.7rem; color:var(--sub);">金:熱組 | 綠:轉折 | 紅:深冷補償</p>
                 <div id="finalCombo" class="ball-row"></div>
             </div>
             <div class="panel">
-                <div class="panel-header">滾動回測 (攻堅命中4)</div>
+                <div class="panel-header">回測數據 (攻堅命中4)</div>
                 <div id="btContainer"></div>
             </div>
         </div>
@@ -58,8 +59,8 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV141Pick(hist) {
-        if(hist.length < 5) return {res:[], ga:[], gb:[]};
+    function getV142Pick(hist) {
+        if(hist.length < 5) return {res:[], hot:[], mid:[], cold:[]};
         const last = hist[hist.length-1].nums;
         let pool = [];
         for (let i=1; i<=39; i++) {
@@ -67,48 +68,46 @@
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
             if(gap <= 2) score += 5000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 4000;
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 4500;
             pool.push({n: i, gap: gap, sc: score});
         }
 
-        // A組 (熱核心): 4碼
-        let ga = pool.sort((a,b) => b.sc - a.sc).slice(0, 4).map(p => p.n);
-        let gaTails = ga.map(n => n % 10);
+        // 1. 熱組 (Gap 0-2): 4碼
+        let hot = pool.filter(p => p.gap <= 2).sort((a,b)=>b.sc - a.sc).slice(0, 4).map(p=>p.n);
+        let hotTails = hot.map(n => n % 10);
 
-        // B組 (引力組): 4碼 - 鎖定 L3-L8 並受 A組磁吸
-        let gbPool = pool.filter(p => !ga.includes(p.n) && p.gap >= 3 && p.gap <= 8)
+        // 2. 轉折組 (Gap 4-10): 2碼 (磁吸熱組尾數)
+        let mid = pool.filter(p => !hot.includes(p.n) && p.gap >= 4 && p.gap <= 10)
             .sort((a,b) => {
-                let attractA = (gaTails.includes(a.n % 10) ? 5000 : 0) + (ga.some(gn => Math.abs(gn-a.n)===1) ? 3000 : 0);
-                let attractB = (gaTails.includes(b.n % 10) ? 5000 : 0) + (ga.some(gn => Math.abs(gn-b.n)===1) ? 3000 : 0);
-                return (b.sc + attractB) - (a.sc + attractA);
-            });
-        
-        let gb = gbPool.slice(0, 4).map(p => p.n);
+                let bA = (hotTails.includes(a.n % 10) ? 7000 : 0) + (hot.some(h => Math.abs(h-a.n)===1) ? 3000 : 0);
+                let bB = (hotTails.includes(b.n % 10) ? 7000 : 0) + (hot.some(h => Math.abs(h-b.n)===1) ? 3000 : 0);
+                return (b.sc + bB) - (a.sc + bA);
+            }).slice(0, 2).map(p => p.n);
 
-        // 連號修正 (若無連號，強制將最後一名替換為 A組核心的鄰號)
-        let res = [...ga, ...gb].sort((a,b)=>a-b);
-        let hasSerial = res.some((n, i) => i > 0 && n === res[i-1] + 1);
-        if (!hasSerial) {
-            let neighbor = ga[0] + 1;
-            if (neighbor > 39) neighbor = ga[0] - 1;
-            res[7] = neighbor;
-        }
+        // 3. 深冷組 (Gap > 12): 2碼
+        let cold = pool.filter(p => !hot.includes(p.n) && !mid.includes(p.n) && p.gap > 12)
+            .sort((a,b) => b.gap - a.gap).slice(0, 2).map(p => p.n);
 
-        return { res: [...new Set(res)].sort((a,b)=>a-b), ga: ga, gb: gb };
+        let res = [...hot, ...mid, ...cold].sort((a,b)=>a-b);
+        // 保證 8 碼
+        let fallback = pool.sort((a,b)=>b.sc - a.sc);
+        for(let p of fallback) { if(res.length >= 8) break; if(!res.includes(p.n)) res.push(p.n); }
+
+        return { res: res.slice(0, 8).sort((a,b)=>a-b), hot, mid, cold };
     }
 
     function render() {
         const btContainer = document.getElementById('btContainer');
         btContainer.innerHTML = '';
         for (let i = state.data.length - 1; i >= Math.max(0, state.data.length - 10); i--) {
-            const pred = getV141Pick(state.data.slice(0, i));
+            const pred = getV142Pick(state.data.slice(0, i));
             const real = state.data[i].nums;
             const hits = pred.res.filter(n => real.includes(n));
             btContainer.innerHTML += `<div class="bt-item"><div><span style="color:var(--sub)">${state.data[i].date.slice(5)}</span><br><span style="font-size:0.8rem">${real.join(' ')}</span></div><div class="hit-count">${hits.length}</div></div>`;
         }
-        const final = getV141Pick(state.data);
+        const final = getV142Pick(state.data);
         document.getElementById('finalCombo').innerHTML = final.res.map(n => {
-            let cls = final.ga.includes(n) ? 'group-a' : 'group-b';
+            let cls = final.hot.includes(n) ? 'hot' : (final.mid.includes(n) ? 'mid' : 'cold');
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
         document.getElementById('mainDisplay').style.display = 'block';
