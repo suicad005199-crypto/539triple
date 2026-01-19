@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v174</title>
+    <title>AI 539 數據中心 v175</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --fractal: #30d158; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --comp: #ff9f0a; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.fractal-node { border: 2px solid var(--fractal); color: var(--fractal); box-shadow: 0 0 10px rgba(48,209,88,0.4); }
+        .ball.comp-node { border: 2px solid var(--comp); color: var(--comp); box-shadow: 0 0 10px rgba(255,159,10,0.3); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
@@ -27,16 +27,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v174)</div>
+        <div class="panel-header">數據注入 (v175)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (分形連動版)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (平衡補償版)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">綠框: 分形同尾連動碼 | 策略: 雙同尾結構 + 熱力慣性鎖定</p>
+                <p style="font-size:0.7rem; color:var(--sub);">橘框: 補償平衡碼 | 策略: 冷區回補 + 溫碼骨架，重建覆蓋率</p>
             </div>
             <div class="panel" id="panel3">
                 <div class="panel-header">Panel 3: 滾動回測紀錄</div>
@@ -67,53 +67,55 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV174Pick(hist) {
-        if(hist.length < 5) return {res:[], fractalNodes:[]};
+    function getV175Pick(hist) {
+        if(hist.length < 5) return {res:[], compNodes:[]};
         const last = hist[hist.length-1].nums;
-        const prev = hist[hist.length-2].nums;
         
-        let tailCount = {};
-        hist.slice(-5).forEach(d => d.nums.forEach(n => tailCount[n%10] = (tailCount[n%10] || 0) + 1));
-        let topTails = Object.entries(tailCount).sort((a,b)=>b[1]-a[1]).map(x => Number(x[0]));
+        // 區間統計：計算 0-9, 10-19, 20-29, 30-39 的近期出現率
+        let zoneStats = [0, 0, 0, 0];
+        hist.slice(-5).forEach(d => d.nums.forEach(n => zoneStats[Math.floor((n-1)/10)]++));
 
         let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            if(gap <= 2) score += 9000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 18000; // 斜連核心
-            if(prev.some(pn => pn === i)) score += 5000; // 隔期跳
-            if(topTails.slice(0, 2).includes(i%10)) score += 7000; // 熱尾加成
             
-            pool.push({n: i, gap: gap, sc: score, t: i%10});
+            // 基礎分：溫碼權重最高 (3-6期)
+            if(gap >= 3 && gap <= 6) score += 12000;
+            if(gap <= 2) score += 8000;
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 10000; // 斜連依舊保留
+            
+            // 補償分：若該區間近期偏冷，大幅加分
+            let zIdx = Math.floor((i-1)/10);
+            if(zoneStats[zIdx] < 4) score += 6000; 
+
+            pool.push({n: i, gap: gap, sc: score, zIdx: zIdx});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let fractalNodes = [];
+        let compNodes = [];
 
-        // 1. 強制提取熱尾分形 (2組同尾)
-        topTails.slice(0, 2).forEach(t => {
-            let tailGroup = pool.filter(x => x.t === t).sort((a,b) => b.sc - a.sc).slice(0, 2);
-            tailGroup.forEach(tg => {
-                if(res.length < 8 && !res.includes(tg.n)) {
-                    res.push(tg.n);
-                    fractalNodes.push(tg.n);
-                }
-            });
+        // 1. 強制選取每個區間的高分碼 (確保覆蓋廣度)
+        [0, 1, 2, 3].forEach(z => {
+            let zBest = pool.filter(p => p.zIdx === z).sort((a,b) => b.sc - a.sc)[0];
+            if(zBest && res.length < 8) {
+                res.push(zBest.n);
+                if(zoneStats[z] < 4) compNodes.push(zBest.n);
+            }
         });
 
-        // 2. 補齊高分斜連碼
+        // 2. 補齊
         for(let p of sorted) {
             if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
         }
 
-        return { res: res.slice(0, 8).sort((a,b)=>a-b), fractalNodes };
+        return { res: res.slice(0, 8).sort((a,b)=>a-b), compNodes };
     }
 
     function render() {
-        const finalPred = getV174Pick(state.data);
+        const finalPred = getV175Pick(state.data);
         
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
@@ -138,7 +140,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>AI 預測</span><span>命中</span></div>`;
         state.data.slice(-10).reverse().forEach((row) => {
             const idx = state.data.findIndex(d => d.date === row.date);
-            const pred = getV174Pick(state.data.slice(0, idx));
+            const pred = getV175Pick(state.data.slice(0, idx));
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `
                 <div class="bt-row">
@@ -150,7 +152,7 @@
         });
 
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => {
-            let cls = finalPred.fractalNodes.includes(n) ? 'fractal-node' : 'active';
+            let cls = finalPred.compNodes.includes(n) ? 'comp-node' : 'active';
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
         document.getElementById('mainDisplay').style.display = 'block';
