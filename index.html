@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v217</title>
+    <title>AI 539 數據中心 v218</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --core: #ffd60a; --expand: #af52de; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -31,16 +31,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v217 - 區域共振優化)</div>
+        <div class="panel-header">數據注入 (v218 - 跨區共鳴優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 結構預測 (集火區間 + 尾數共振)</div>
+                <div class="panel-header">Panel 2: 結構預測 (同尾對接 + 斜連)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：強制集火區間內的尾數對應，並鎖定 4 星槓鈴補償。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">策略：強制區間內同尾連動，並優化 3+2 集火區塊內的物理偏移。</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期滾動回測</div>
@@ -48,7 +48,7 @@
             </div>
         </div>
         <div class="panel">
-            <div class="panel-header">Panel 4: 分區走勢矩陣 (共振規律)</div>
+            <div class="panel-header">Panel 4: 分區走勢矩陣 (尾數對接分析)</div>
             <div class="matrix-wrapper" id="matrixContainer"></div>
         </div>
     </div>
@@ -69,7 +69,7 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV217Pick(hist) {
+    function getV218Pick(hist) {
         if(hist.length < 5) return {res:[], coreNodes:[], expandNodes:[]};
         const last = hist[hist.length-1].nums;
         let pool = [];
@@ -78,9 +78,12 @@
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            let score = (last.some(ln => Math.abs(ln-i) === 1) ? 35 : 0) +
-                        (last.some(ln => Math.abs(ln-i) === 2) ? 25 : 0) +
-                        (last.some(ln => ln % 10 === i % 10) ? 20 : 0);
+            
+            // 權重分配：斜連(40) + 同尾(30) + 溫碼(20)
+            let score = (last.some(ln => Math.abs(ln-i) === 1) ? 40 : 0) +
+                        (last.some(ln => ln % 10 === i % 10) ? 30 : 0) +
+                        (gap >= 4 && gap <= 9 ? 20 : 0);
+            
             let zIdx = Math.min(Math.floor((i-1)/8), 4);
             zoneStats[zIdx] += score;
             pool.push({n: i, gap, score, zone: zIdx, tail: i % 10});
@@ -89,40 +92,39 @@
         let topZones = zoneStats.map((s, i) => ({i, s})).sort((a,b) => b.s - a.s).slice(0, 2).map(z => z.i);
         let coreNodes = [];
         
-        // 區間內尾數連動算法
-        let zoneAPool = pool.filter(p => p.zone === topZones[0]).sort((a,b) => b.score - a.score);
-        let zoneBPool = pool.filter(p => p.zone === topZones[1]).sort((a,b) => b.score - a.score);
+        // 區間集火 + 同尾鎖定
+        let zAPool = pool.filter(p => p.zone === topZones[0]).sort((a,b) => b.score - a.score);
+        let zBPool = pool.filter(p => p.zone === topZones[1]).sort((a,b) => b.score - a.score);
 
-        // 區間 A 取 3 碼
-        if (zoneAPool.length > 0) {
-            coreNodes.push(zoneAPool[0].n);
-            let tailToMatch = zoneAPool[0].tail;
-            // 優先找同尾，找不到找次高分
-            let matches = zoneAPool.slice(1).sort((a,b) => (a.tail === tailToMatch ? 100 : a.score) - (b.tail === tailToMatch ? 100 : b.score));
-            coreNodes.push(zoneAPool[1].n, zoneAPool[2].n);
+        if (zAPool.length >= 3) {
+            coreNodes.push(zAPool[0].n, zAPool[1].n, zAPool[2].n);
         }
-
-        // 區間 B 取 2 碼 (嘗試與區間 A 形成尾數共振)
-        let coreTails = coreNodes.map(n => n % 10);
-        zoneBPool.sort((a,b) => {
-            let aBonus = coreTails.includes(a.tail) ? 50 : 0;
-            let bBonus = coreTails.includes(b.tail) ? 50 : 0;
+        
+        // 在區間 B 中強制對接 A 的尾數
+        let aTails = coreNodes.map(n => n % 10);
+        zBPool.sort((a,b) => {
+            let aBonus = aTails.includes(a.tail) ? 60 : 0;
+            let bBonus = aTails.includes(b.tail) ? 60 : 0;
             return (b.score + bBonus) - (a.score + aBonus);
         });
-        coreNodes.push(zoneBPool[0].n, zoneBPool[1].n);
+        
+        if (zBPool.length >= 2) {
+            coreNodes.push(zBPool[0].n, zBPool[1].n);
+        }
 
-        // 擴展 3 碼：4 星槓鈴 (2 極冷 + 1 極熱)
-        let expandNodes = [];
-        let sortedForExpand = pool.filter(p => !coreNodes.includes(p.n));
-        let cold = sortedForExpand.sort((a,b) => b.gap - a.gap).slice(0, 2).map(p => p.n);
-        let hot = sortedForExpand.filter(p => p.gap === 0).sort((a,b) => b.score - a.score).slice(0, 1).map(p => p.n);
-        expandNodes = [...cold, ...hot];
+        // 擴展 3 碼：槓鈴 2.0 (冷/熱/溫 平衡)
+        let rest = pool.filter(p => !coreNodes.includes(p.n));
+        let cold = rest.sort((a,b) => b.gap - a.gap)[0]?.n;
+        let hot = rest.filter(p => p.gap === 0).sort((a,b) => b.score - a.score)[0]?.n;
+        let warm = rest.filter(p => p.gap >= 10 && p.gap <= 15).sort((a,b) => b.score - a.score)[0]?.n;
+        
+        let expandNodes = [cold, hot, warm].filter(n => n !== undefined);
 
-        return { res: [...coreNodes, ...expandNodes].slice(0, 8).sort((a,b)=>a-b), coreNodes, expandNodes };
+        return { res: [...coreNodes, ...expandNodes].sort((a,b)=>a-b), coreNodes, expandNodes };
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV217Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV218Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
             `<div class="ball ${finalPred.coreNodes.includes(n)?'core-node':'expand-node'}">${n}</div>`).join('');
 
@@ -130,7 +132,7 @@
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV217Pick(histUntil);
+            const pred = getV218Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:11px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
