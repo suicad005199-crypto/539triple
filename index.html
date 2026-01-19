@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v179</title>
+    <title>AI 539 數據中心 v180</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --fuse: #ff9500; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --neighbor: #5856d6; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,13 +13,13 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.fuse-node { border: 2px solid var(--fuse); color: var(--fuse); box-shadow: 0 0 10px rgba(255,149,0,0.4); }
+        .ball.neighbor-node { border: 2px solid var(--neighbor); color: var(--neighbor); box-shadow: 0 0 10px rgba(88,86,214,0.4); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
         th { background: #2c2c2e; color: var(--sub); }
         .is-hit { background: var(--hit); color: #fff; font-weight: bold; }
-        .bt-row { border-bottom: 1px solid #38383a; padding: 8px 0; display: grid; grid-template-columns: 60px 1.2fr 1.2fr 40px; align-items: center; gap: 10px; font-size: 11px; }
+        .bt-row { border-bottom: 1px solid #38383a; padding: 8px 0; display: grid; grid-template-columns: 80px 1.2fr 1.2fr 40px; align-items: center; gap: 10px; font-size: 11px; }
         .hit-count { color: var(--success); font-weight: bold; text-align: right; font-size: 14px; }
     </style>
 </head>
@@ -27,19 +27,19 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v179)</div>
+        <div class="panel-header">數據注入 (v180)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (斜連引信版)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (鄰里壓縮版)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">橙框: 斜連引信碼 | 策略: 尾數聚變 + 爆發路徑鎖定</p>
+                <p style="font-size:0.7rem; color:var(--sub);">紫框: 鄰里共振碼 | 策略: 局部空間壓縮，強制命中 2 轉 4</p>
             </div>
             <div class="panel" id="panel3">
-                <div class="panel-header">Panel 3: 滾動回測紀錄</div>
+                <div class="panel-header">Panel 3: 滾動回測 (新至舊)</div>
                 <div id="btContainer"></div>
             </div>
         </div>
@@ -67,79 +67,91 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV179Pick(hist) {
-        if(hist.length < 5) return {res:[], fuseNodes:[]};
+    function getV180Pick(hist) {
+        if(hist.length < 5) return {res:[], neighborNodes:[]};
         const last = hist[hist.length-1].nums;
-        const prev = hist[hist.length-2].nums;
         
         let pool = [];
-        let fuseNodes = [];
-        
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            
-            // 基礎分：溫碼
-            if(gap >= 3 && gap <= 9) score += 10000;
-            
-            // 斜連引信偵測 (n-1 -> n -> n+1)
-            let isFuse = false;
-            last.forEach(ln => {
-                if(Math.abs(ln-i) === 1) {
-                    score += 15000; 
-                    // 偵測連續斜連 (引信鏈)
-                    if(prev.some(pn => (pn === ln-1 && i === ln+1) || (pn === ln+1 && i === ln-1))) {
-                        score += 20000;
-                        isFuse = true;
-                    }
-                }
-            });
-
-            pool.push({n: i, gap: gap, sc: score, t: i%10, isFuse: isFuse});
+            if(gap >= 3 && gap <= 10) score += 12000; // 核心溫碼
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 15000; // 斜連加權
+            pool.push({n: i, gap: gap, sc: score});
         }
 
-        // 1. 優先選取引信碼
-        let res = pool.filter(p => p.isFuse).map(p => { fuseNodes.push(p.n); return p.n; });
-
-        // 2. 尾數聚變：鎖定分數最高的 4 個尾數
-        let tailScores = {};
-        pool.forEach(p => tailScores[p.t] = (tailScores[p.t] || 0) + p.sc);
-        let topTails = Object.entries(tailScores).sort((a,b)=>b[1]-a[1]).slice(0, 4).map(x => Number(x[0]));
-
         let sorted = pool.sort((a,b) => b.sc - a.sc);
+        let res = [];
+        let neighborNodes = [];
+
+        // 1. 選取 4 顆高分種子
         for(let p of sorted) {
-            if(res.length < 8 && !res.includes(p.n) && topTails.includes(p.t)) {
-                res.push(p.n);
+            if(res.length < 4) res.push(p.n);
+        }
+
+        // 2. 鄰里壓縮邏輯：偵測種子間的空隙並填補
+        res.sort((a,b)=>a-b);
+        for(let i=0; i<res.length-1; i++) {
+            let diff = res[i+1] - res[i];
+            if(diff === 2) { // 如 12, 14 填補 13
+                let mid = res[i] + 1;
+                if(!res.includes(mid) && res.length < 8) {
+                    res.push(mid);
+                    neighborNodes.push(mid);
+                }
+            } else if(diff === 1) { // 如 12, 13 擴張 11 或 14
+                [res[i]-1, res[i+1]+1].forEach(side => {
+                    if(side >= 1 && side <= 39 && !res.includes(side) && res.length < 8) {
+                        res.push(side);
+                        neighborNodes.push(side);
+                    }
+                });
             }
         }
 
-        // 3. 補齊
+        // 3. 補齊剩餘名額
         for(let p of sorted) {
             if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
         }
 
-        return { res: res.slice(0, 8).sort((a,b)=>a-b), fuseNodes };
+        return { res: res.slice(0, 8).sort((a,b)=>a-b), neighborNodes };
     }
 
     function render() {
-        const finalPred = getV179Pick(state.data);
+        const finalPred = getV180Pick(state.data);
+        
+        // Panel 3: Reverse the data for New to Old display
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>AI 預測</span><span>命中</span></div>`;
-        state.data.slice(-10).reverse().forEach((row) => {
-            const idx = state.data.findIndex(d => d.date === row.date);
-            const pred = getV179Pick(state.data.slice(0, idx));
-            const hits = pred.res.filter(n => row.nums.includes(n));
-            bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span style="color:var(--primary)">${row.nums.join(' ')}</span><span style="font-size:10px">${pred.res.map(n => hits.includes(n)? `<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</span><span class="hit-count">${hits.length}</span></div>`;
-        });
-        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => `<div class="ball ${finalPred.fuseNodes.includes(n)?'fuse-node':'active'}">${n}</div>`).join('');
         
+        // Ensure reverse chronological order
+        const recentData = [...state.data].reverse().slice(0, 10);
+        
+        recentData.forEach((row) => {
+            const idx = state.data.findIndex(d => d.date === row.date);
+            const pred = getV180Pick(state.data.slice(0, idx));
+            const hits = pred.res.filter(n => row.nums.includes(n));
+            bt.innerHTML += `
+                <div class="bt-row">
+                    <span>${row.date}</span>
+                    <span style="color:var(--primary)">${row.nums.join(' ')}</span>
+                    <span style="font-size:10px">${pred.res.map(n => hits.includes(n)? `<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</span>
+                    <span class="hit-count">${hits.length}</span>
+                </div>`;
+        });
+
+        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
+            `<div class="ball ${finalPred.neighborNodes.includes(n)?'neighbor-node':'active'}">${n}</div>`
+        ).join('');
+
+        // Panel 4 Matrix
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
-        tableHtml += `</tr></thead><tbody><tr style="background:#2c2c2e"><td>下期預測</td>`;
+        tableHtml += `</tr></thead><tbody><tr style="background:#2c2c2e"><td>預測</td>`;
         for(let i=1; i<=39; i++) tableHtml += `<td class="${finalPred.res.includes(i)?'pred-mark':''}" style="color:var(--primary)">${finalPred.res.includes(i)?'●':''}</td>`;
         tableHtml += `</tr>`;
-        state.data.slice(-10).reverse().forEach(row => {
+        recentData.forEach(row => {
             tableHtml += `<tr><td>${row.date.slice(5)}</td>`;
             for(let i=1; i<=39; i++) tableHtml += `<td class="${row.nums.includes(i)?'is-hit':''}">${row.nums.includes(i)?i:''}</td>`;
             tableHtml += `</tr>`;
