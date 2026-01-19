@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v165</title>
+    <title>AI 539 數據中心 v166</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --serial: #ff453a; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --tri: #5ac8fa; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.serial-trap { border: 2px solid var(--serial); color: var(--serial); }
+        .ball.tri-node { border: 2px solid var(--tri); color: var(--tri); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
@@ -27,16 +27,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v165)</div>
+        <div class="panel-header">數據注入 (v166)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (連號慣性)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (三點支撐)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">紅框: 連號陷阱碼 | 策略: 鎖定 4 星共伴結構</p>
+                <p style="font-size:0.7rem; color:var(--sub);">淺藍框: 支撐節點碼 | 策略: 強制冷熱單元聚合</p>
             </div>
             <div class="panel" id="panel3">
                 <div class="panel-header">Panel 3: 滾動回測紀錄</div>
@@ -67,46 +67,43 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV165Pick(hist) {
-        if(hist.length < 5) return {res:[], serialCodes:[]};
+    function getV166Pick(hist) {
+        if(hist.length < 5) return {res:[], triNodes:[]};
         const last = hist[hist.length-1].nums;
-        
         let pool = [];
+
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            if(gap <= 2) score += 6000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 9500; // 強調斜連
+            if(gap <= 2) score += 7000;
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 8000;
+            if(gap >= 15) score += 4000; // 冷碼加權
             pool.push({n: i, gap: gap, sc: score, t: i%10});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let serialCodes = [];
-        let tailCounts = {};
+        let triNodes = [];
 
-        // 核心選取邏輯
+        // 三點支撐選取
         for(let p of sorted) {
             if(res.length >= 8) break;
-            
-            // 尾數限制檢查
-            tailCounts[p.t] = (tailCounts[p.t] || 0);
-            if(tailCounts[p.t] >= 3) continue;
-
             if(!res.includes(p.n)) {
                 res.push(p.n);
-                tailCounts[p.t]++;
+                
+                // 配對 1: 同尾溫碼
+                let tPair = pool.find(x => x.t === p.t && x.n !== p.n && !res.includes(x.n) && x.gap > 4);
+                if(tPair && res.length < 8) {
+                    res.push(tPair.n);
+                    triNodes.push(tPair.n);
+                }
 
-                // 連號鎖定：若核心碼分數極高，強行拉入鄰號
-                if(p.sc > 13000) {
-                    let neighbors = [p.n-1, p.n+1].filter(n => n>=1 && n<=39 && !res.includes(n));
-                    if(neighbors.length > 0 && res.length < 8) {
-                        let nb = neighbors[0];
-                        res.push(nb);
-                        serialCodes.push(nb);
-                        tailCounts[nb%10] = (tailCounts[nb%10] || 0) + 1;
-                    }
+                // 配對 2: 斜連冷碼
+                let cPair = pool.find(x => Math.abs(x.n - p.n) === 1 && !res.includes(x.n) && x.gap > 10);
+                if(cPair && res.length < 8) {
+                    res.push(cPair.n);
+                    triNodes.push(cPair.n);
                 }
             }
         }
@@ -116,18 +113,18 @@
             if(next) res.push(next.n); else break;
         }
 
-        return { res: res.sort((a,b)=>a-b), serialCodes };
+        return { res: res.sort((a,b)=>a-b), triNodes };
     }
 
     function render() {
-        const finalPred = getV165Pick(state.data);
+        const finalPred = getV16Pick(state.data); // 注意：內部函式名修正
+        const finalPredObj = getV166Pick(state.data);
         
-        // Panel 4
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
         tableHtml += `</tr></thead><tbody><tr style="background:#2c2c2e"><td>預測</td>`;
         for(let i=1; i<=39; i++) {
-            let isPred = finalPred.res.includes(i);
+            let isPred = finalPredObj.res.includes(i);
             tableHtml += `<td class="${isPred ? 'pred-mark' : ''}" style="color:var(--primary)">${isPred ? '●' : ''}</td>`;
         }
         tableHtml += `</tr>`;
@@ -142,12 +139,11 @@
         tableHtml += `</tbody></table>`;
         document.getElementById('matrixContainer').innerHTML = tableHtml;
 
-        // Panel 3
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎號碼</span><span>AI 預測號碼</span><span>命中</span></div>`;
         state.data.slice(-10).reverse().forEach((row) => {
             const currentIdx = state.data.findIndex(d => d.date === row.date);
-            const pred = getV165Pick(state.data.slice(0, currentIdx));
+            const pred = getV166Pick(state.data.slice(0, currentIdx));
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `
                 <div class="bt-row">
@@ -158,9 +154,8 @@
                 </div>`;
         });
 
-        // Panel 2
-        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => {
-            let cls = finalPred.serialCodes.includes(n) ? 'serial-trap' : 'active';
+        document.getElementById('finalCombo').innerHTML = finalPredObj.res.map(n => {
+            let cls = finalPredObj.triNodes.includes(n) ? 'tri-node' : 'active';
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
         document.getElementById('mainDisplay').style.display = 'block';
