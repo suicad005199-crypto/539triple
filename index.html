@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v186</title>
+    <title>AI 539 數據中心 v187</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --expect: #ff2d55; --thermal: #32d74b; --tail: #ff9500; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --expect: #ff2d55; --thermal: #32d74b; --diffuse: #007aff; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); }
@@ -15,7 +15,7 @@
         .ball.active { background: var(--primary); color: #000; border: none; }
         .ball.expect-node { border: 2px solid var(--expect); color: var(--expect); }
         .ball.thermal-node { border: 2px solid var(--thermal); color: var(--thermal); }
-        .ball.tail-node { border: 2px solid var(--tail); color: var(--tail); }
+        .ball.diffuse-node { border: 2px solid var(--diffuse); color: var(--diffuse); }
         
         .matrix-wrapper { width: 100%; overflow-x: auto; }
         .matrix-table { width: 100%; border-collapse: collapse; text-align: center; table-layout: fixed; min-width: 850px; }
@@ -33,19 +33,19 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v186)</div>
+        <div class="panel-header">數據注入 (v187)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (同尾耦合版)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (熱點擴散版)</div>
                 <div id="finalCombo" class="ball-row"></div>
                 <p style="font-size:0.7rem; color:var(--sub);">
                     <span style="color:var(--thermal)">綠框: 熱核</span> | 
                     <span style="color:var(--expect)">紅框: 期望</span> | 
-                    <span style="color:var(--tail)">橘框: 同尾</span>
+                    <span style="color:var(--diffuse)">藍框: 擴散</span>
                 </p>
             </div>
             <div class="panel" id="panel3">
@@ -77,60 +77,69 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV186Pick(hist) {
-        if(hist.length < 5) return {res:[], expectNodes:[], thermalNodes:[], tailNodes:[]};
+    function getV187Pick(hist) {
+        if(hist.length < 5) return {res:[], expectNodes:[], thermalNodes:[], diffuseNodes:[]};
         const last = hist[hist.length-1].nums;
         
-        // 尾數熱度統計
-        const tailCounts = {};
-        hist.slice(-10).forEach(d => d.nums.forEach(n => tailCounts[n%10] = (tailCounts[n%10] || 0) + 1));
-        const hotTail = Number(Object.entries(tailCounts).sort((a,b)=>b[1]-a[1])[0][0]);
+        // 區間統計 (0, 10, 20, 30)
+        const zoneCounts = {0:0, 1:0, 2:0, 3:0};
+        hist.slice(-5).forEach(d => d.nums.forEach(n => zoneCounts[Math.floor(n/10)]++));
+        const hotZone = Number(Object.entries(zoneCounts).sort((a,b)=>b[1]-a[1])[0][0]);
 
         let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            if(gap <= 2) score += 20000;
-            if(gap >= 3 && gap <= 8) score += 12000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 15000;
-            if(i%10 === hotTail) score += 5000;
-            pool.push({n: i, gap: gap, sc: score, t: i%10});
+            if(gap <= 2) score += 20000; 
+            if(gap >= 3 && gap <= 6) score += 12000; // 加重溫碼權重
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 18000; // 加重斜連
+            if(Math.floor(i/10) === hotZone) score += 5000;
+            pool.push({n: i, gap: gap, sc: score, z: Math.floor(i/10)});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
         let thermalNodes = [];
         let expectNodes = [];
-        let tailNodes = [];
+        let diffuseNodes = [];
 
-        // 1. 強制 3 顆熱核 (綠)
-        sorted.filter(p => p.gap <= 2).slice(0, 3).forEach(p => { res.push(p.n); thermalNodes.push(p.n); });
+        // 1. 選取 4 顆核心碼 (熱碼/斜連)
+        sorted.slice(0, 4).forEach(p => { 
+            res.push(p.n); 
+            if(p.gap <= 2) thermalNodes.push(p.n);
+        });
 
-        // 2. 強制 2 顆同尾耦合 (橘)
-        sorted.filter(p => p.t === hotTail && !res.includes(p.n)).slice(0, 2).forEach(p => { res.push(p.n); tailNodes.push(p.n); });
+        // 2. 熱點擴散 (藍)：從熱門區間找溫碼
+        sorted.filter(p => p.z === hotZone && !res.includes(p.n) && p.gap >= 3).slice(0, 2).forEach(p => {
+            res.push(p.n);
+            diffuseNodes.push(p.n);
+        });
 
-        // 3. 強制 2 顆期望冷碼 (紅)
-        sorted.filter(p => p.gap >= 10 && !res.includes(p.n)).slice(0, 2).forEach(p => { res.push(p.n); expectNodes.push(p.n); });
+        // 3. 期望冷碼 (紅)：反彈補位
+        sorted.filter(p => p.gap >= 10 && !res.includes(p.n)).slice(0, 2).forEach(p => {
+            res.push(p.n);
+            expectNodes.push(p.n);
+        });
 
-        // 4. 補齊至 8 碼
+        // 4. 補齊
         for(let p of sorted) {
             if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
         }
 
-        return { res: res.sort((a,b)=>a-b), expectNodes, thermalNodes, tailNodes };
+        return { res: res.sort((a,b)=>a-b), expectNodes, thermalNodes, diffuseNodes };
     }
 
     function render() {
         const fullData = [...state.data];
-        const finalPred = getV186Pick(fullData);
+        const finalPred = getV187Pick(fullData);
         const recentForBT = fullData.slice(-10).reverse();
         
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => {
             let cls = 'active';
             if(finalPred.thermalNodes.includes(n)) cls = 'thermal-node';
             if(finalPred.expectNodes.includes(n)) cls = 'expect-node';
-            if(finalPred.tailNodes.includes(n)) cls = 'tail-node';
+            if(finalPred.diffuseNodes.includes(n)) cls = 'diffuse-node';
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
 
@@ -139,7 +148,7 @@
         
         recentForBT.forEach((row) => {
             const historyUntilPoint = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV186Pick(historyUntilPoint);
+            const pred = getV187Pick(historyUntilPoint);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `
                 <div class="bt-row">
