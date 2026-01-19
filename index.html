@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v154</title>
+    <title>AI 539 數據中心 v155</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
@@ -26,16 +26,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v154)</div>
+        <div class="panel-header">數據注入 (v155)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">下期精準 8 碼 (雙集群定位)</div>
+                <div class="panel-header">下期精準 8 碼 (彈力擴散)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">策略：強迫區間坍縮，瞄準命中 $\ge 2$ 覆蓋率 80%</p>
+                <p style="font-size:0.7rem; color:var(--sub);">策略：核心波峰擴散 + 隔期斜連加壓</p>
             </div>
             <div class="panel">
                 <div class="panel-header">滾動回測 (前 10 期)</div>
@@ -66,36 +66,43 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV154Pick(hist) {
-        if(hist.length < 10) return {res:[]};
+    function getV155Pick(hist) {
+        if(hist.length < 5) return {res:[]};
         const last = hist[hist.length-1].nums;
+        const last2 = hist[hist.length-2].nums;
         
-        // 1. 計算區間熱度
-        const zones = [0,0,0,0];
-        hist.slice(-10).forEach(d => d.nums.forEach(n => zones[Math.floor((n-1)/10)]++));
-        const topZones = zones.map((v, i) => ({z:i, v})).sort((a,b)=>b.v - a.v).slice(0, 2).map(x => x.z);
-
-        // 2. 評分
         let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
             if(gap <= 2) score += 5000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 7000; // 斜連加壓
-            pool.push({n: i, gap: gap, sc: score, z: Math.floor((i-1)/10)});
+            // 強化斜連：包含隔期斜連
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 7500;
+            if(last2.some(ln => Math.abs(ln-i) === 2)) score += 3000;
+            pool.push({n: i, gap: gap, sc: score, tail: i%10});
         }
 
-        // 3. 在前兩大熱區中各選 4 碼
+        let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        topZones.forEach(zIdx => {
-            let zPool = pool.filter(p => p.z === zIdx).sort((a,b)=>b.sc - a.sc);
-            res.push(...zPool.slice(0, 4).map(p => p.n));
+
+        // 1. 核心 3 碼
+        let core = sorted.slice(0, 3);
+        core.forEach(p => res.push(p.n));
+
+        // 2. 擴散捕捉 (鄰號或同尾)
+        core.forEach(p => {
+            if(res.length < 8) {
+                let neighbor = p.n + 1 > 39 ? p.n - 1 : p.n + 1;
+                if(!res.includes(neighbor)) res.push(neighbor);
+                
+                let sameTail = pool.find(x => x.n % 10 === p.tail && !res.includes(x.n) && x.gap < 10);
+                if(sameTail && res.length < 8) res.push(sameTail.n);
+            }
         });
 
-        // 若不足 8 碼 (區間過窄)，由全域高分補齊
-        let sortedAll = pool.sort((a,b)=>b.sc - a.sc);
-        for(let p of sortedAll) {
+        // 3. 補齊至 8 碼 (選取遺漏溫區)
+        for(let p of sorted) {
             if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
         }
 
@@ -103,7 +110,6 @@
     }
 
     function render() {
-        // Panel 4 Table
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i < 10 ? '0'+i : i}</th>`;
         tableHtml += `</tr></thead><tbody>`;
@@ -119,16 +125,15 @@
         tableHtml += `</tbody></table>`;
         document.getElementById('matrixContainer').innerHTML = tableHtml;
 
-        // Results
         const bt = document.getElementById('btContainer');
         bt.innerHTML = '';
         state.data.slice(-10).forEach((row, idx) => {
-            const pred = getV154Pick(state.data.slice(0, state.data.length - 10 + idx));
+            const pred = getV155Pick(state.data.slice(0, state.data.length - 10 + idx));
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-item"><span>${row.date.slice(5)}</span><span class="hit-count">中 ${hits.length}</span></div>`;
         });
 
-        const final = getV154Pick(state.data);
+        const final = getV155Pick(state.data);
         document.getElementById('finalCombo').innerHTML = final.res.map(n => `<div class="ball active">${n}</div>`).join('');
         document.getElementById('mainDisplay').style.display = 'block';
     }
