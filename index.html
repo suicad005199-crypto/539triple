@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v237</title>
+    <title>AI 539 數據中心 v239</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --lock: #5856d6; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --jump: #5ac8fa; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.lock-node { border: 2px solid var(--lock); color: var(--lock); box-shadow: 0 0 8px rgba(88,86,214,0.4); }
+        .ball.jump-node { border: 2px solid var(--jump); color: var(--jump); box-shadow: 0 0 8px rgba(90,200,250,0.4); }
         .matrix-table { width: 100%; border-collapse: collapse; text-align: center; min-width: 900px; }
         .matrix-table th, .matrix-table td { border: 1px solid var(--border); height: 30px; font-size: 11px; }
         .is-hit { background: var(--hit) !important; color: #fff; font-weight: bold; }
@@ -25,16 +25,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v237 - 相位鎖定衝擊 3 星)</div>
+        <div class="panel-header">數據注入 (v239 - 避開三連號 / 跳碼結構)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 精選 7 碼 (三連鎖 + 同尾對)</div>
+                <div class="panel-header">Panel 2: 精選 7 碼 (雙跳碼鏈 + 尾數互補)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">紫框：鎖定種子鏈 | 策略：強制鎖定最強種子的鄰位包夾，配合雙軌同尾，解決 2 星卡位問題。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">藍框：跳碼補位點 | 策略：嚴格禁絕三連號，改採「2+1」跳格結構，增加三星撞擊面積。</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期滾動回測 (7 碼)</div>
@@ -42,7 +42,7 @@
             </div>
         </div>
         <div class="panel">
-            <div class="panel-header">Panel 4: 相位偏移矩陣 (鄰位咬合分析)</div>
+            <div class="panel-header">Panel 4: 跳碼分佈矩陣</div>
             <div style="overflow-x:auto;"><div id="matrixContainer"></div></div>
         </div>
     </div>
@@ -63,11 +63,11 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV237Pick(hist) {
-        if(hist.length < 5) return {res:[], lockNodes:[]};
+    function getV239Pick(hist) {
+        if(hist.length < 5) return {res:[], jumpNodes:[]};
         const last = hist[hist.length-1].nums;
         
-        // 1. 找出最熱兩個尾數
+        // 1. 識別最強兩個尾數
         const tails = {};
         hist.slice(-10).forEach(d => d.nums.forEach(n => tails[n%10] = (tails[n%10] || 0) + 1));
         const topTails = Object.entries(tails).sort((a,b)=>b[1]-a[1]).slice(0, 2).map(e => Number(e[0]));
@@ -76,49 +76,65 @@
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            let sc = (last.some(ln => Math.abs(ln-i) === 1) ? 40000 : 0) + // 斜連權重
+            let sc = (last.some(ln => Math.abs(ln-i) === 1) ? 35000 : 0) + 
                      (topTails.includes(i%10) ? 25000 : 0) + 
-                     (gap >= 3 && gap <= 7 ? 15000 : 0);
+                     (gap >= 3 && gap <= 8 ? 10000 : 0);
             pool.push({n: i, gap, sc, t: i%10});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let lockNodes = [];
+        let jumpNodes = [];
 
-        // 策略 A: 三連鎖包夾 (3碼)
-        let seed = sorted[0].n;
-        [seed-1, seed, seed+1].forEach(n => {
-            if(n >= 1 && n <= 39) {
-                res.push(n);
-                lockNodes.push(n);
+        // 策略 A: 雙跳格鏈 (4碼: 2連 + 1間隔)
+        // 第一鏈
+        let s1 = sorted[0].n;
+        res.push(s1);
+        let n1 = pool.find(p => p.n === s1+1 || p.n === s1-1);
+        if(n1) res.push(n1.n);
+        let j1 = pool.find(p => !res.includes(p.n) && (p.n === s1+2 || p.n === s1-2));
+        if(j1) { res.push(j1.n); jumpNodes.push(j1.n); }
+
+        // 第二鏈 (避開三連號檢查)
+        for(let p of sorted) {
+            if(res.length >= 6) break;
+            if(!res.includes(p.n)) {
+                // 檢查加入後是否會形成三連號
+                let tempRes = [...res, p.n].sort((a,b)=>a-b);
+                let hasTriple = false;
+                for(let i=0; i<tempRes.length-2; i++) {
+                    if(tempRes[i+1] === tempRes[i]+1 && tempRes[i+2] === tempRes[i]+2) hasTriple = true;
+                }
+                if(!hasTriple) res.push(p.n);
             }
-        });
+        }
 
-        // 策略 B: 同尾雙軌 (4碼)
-        topTails.forEach(t => {
-            let matches = sorted.filter(p => p.t === t && !res.includes(p.n)).slice(0, 2);
-            matches.forEach(p => res.push(p.n));
-        });
+        // 策略 B: 補齊至 7 碼 (維持尾數與避開三連)
+        for(let p of sorted) {
+            if(res.length >= 7) break;
+            if(!res.includes(p.n)) {
+                let tempRes = [...res, p.n].sort((a,b)=>a-b);
+                let hasTriple = false;
+                for(let i=0; i<tempRes.length-2; i++) {
+                    if(tempRes[i+1] === tempRes[i]+1 && tempRes[i+2] === tempRes[i]+2) hasTriple = true;
+                }
+                if(!hasTriple) res.push(p.n);
+            }
+        }
 
-        // 補齊或裁切至 7 碼
-        let fillers = sorted.filter(p => !res.includes(p.n));
-        while(res.length < 7) res.push(fillers.shift().n);
-        res = res.slice(0, 7).sort((a,b)=>a-b);
-
-        return { res, lockNodes };
+        return { res: res.sort((a,b)=>a-b), jumpNodes };
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV237Pick(fullData), recentForBT = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV239Pick(fullData), recentForBT = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
-            `<div class="ball ${finalPred.lockNodes.includes(n)?'lock-node':'active'}">${n}</div>`).join('');
+            `<div class="ball ${finalPred.jumpNodes.includes(n)?'jump-node':'active'}">${n}</div>`).join('');
 
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV237Pick(histUntil);
+            const pred = getV239Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:10px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
