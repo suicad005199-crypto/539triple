@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v266</title>
+    <title>AI 539 數據中心 v267</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --harmonic: #00d2ff; --mean: #ff9f0a; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --chaos: #ff2d55; --rebound: #5856d6; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow: hidden; }
@@ -13,8 +13,8 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.harmonic-node { border: 2px solid var(--harmonic); color: var(--harmonic); box-shadow: 0 0 10px rgba(0,210,255,0.4); }
-        .ball.mean-node { border: 2px solid var(--mean); color: var(--mean); }
+        .ball.chaos-node { border: 2px solid var(--chaos); color: var(--chaos); box-shadow: 0 0 10px rgba(255,45,85,0.4); }
+        .ball.rebound-node { border: 2px solid var(--rebound); color: var(--rebound); }
         .matrix-wrapper { width: 100%; overflow-x: auto; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); }
         .matrix-table { width: 100%; border-collapse: collapse; text-align: center; table-layout: fixed; min-width: 1100px; }
         .matrix-table th, .matrix-table td { border: 1px solid var(--border); height: 34px; font-size: 11px; }
@@ -27,25 +27,25 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v266 - 諧波共振策略)</div>
+        <div class="panel-header">數據注入 (v267 - 混沌修正策略)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">精選 10 碼 (諧波攔截 + 均值修正)</div>
+                <div class="panel-header">精選 10 碼 (混沌反彈 + 真空覆蓋)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">青框：諧波跨度碼 | 橘框：均值回歸碼 | 策略：打碎過度聚攏的核心，找回 100% 覆蓋率與保底 2 星。</p>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">紅框：斷層反彈碼 | 藍框：真空覆蓋位 | 策略：強制修正 0 命中斷裂，回歸物理區間攔截與能量守恆規律。</p>
             </div>
             <div class="panel">
-                <div class="panel-header">10 期回測 (滾動分析)</div>
+                <div class="panel-header">緊急回測監控 (10 期)</div>
                 <div id="btContainer"></div>
             </div>
         </div>
         
         <div class="panel">
-            <div class="panel-header">諧波與遺漏熱力矩陣</div>
+            <div class="panel-header">區間能量分佈矩陣</div>
             <div class="matrix-wrapper"><div id="matrixContainer"></div></div>
         </div>
     </div>
@@ -66,49 +66,53 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV266Pick(hist) {
-        if(hist.length < 15) return {res:[], harmonicNodes:[], meanNodes:[]};
-        const last = hist[hist.length-1].nums;
+    function getV267Pick(hist) {
+        if(hist.length < 20) return {res:[], chaosNodes:[], reboundNodes:[]};
         
+        const last5 = hist.slice(-5);
+        const last20 = hist.slice(-20);
         let pool = [];
+        
         for (let i=1; i<=39; i++) {
-            let gap = 0;
+            let count5 = 0, count20 = 0, gap = 0;
+            last5.forEach(d => { if(d.nums.includes(i)) count5++; });
+            last20.forEach(d => { if(d.nums.includes(i)) count20++; });
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            // 諧波得分：與上期獎號形成費氏間距
-            let harmonicSc = last.some(ln => [5, 8, 13].includes(Math.abs(ln-i))) ? 40000 : 0;
-            // 均值修正：針對遺漏 4-9 期的溫碼加權
-            let meanSc = (gap >= 4 && gap <= 9) ? 35000 : 0;
-            let sc = harmonicSc + meanSc + (last.includes(i) ? 15000 : 0);
-            pool.push({n: i, sc, gap, z: Math.floor((i-1)/10)});
+            
+            // 混沌得分：突然消失的強勢碼 (count5=0 但 count20 高)
+            let chaosSc = (count5 === 0 && count20 >= 3) ? 50000 : 0;
+            // 真空得分：遺漏 10-15 期的冷轉溫碼
+            let reboundSc = (gap >= 10 && gap <= 15) ? 40000 : 0;
+            let sc = chaosSc + reboundSc + (gap === 1 ? 20000 : 0);
+            pool.push({n: i, sc, gap, count20});
         }
         
         let sorted = pool.sort((a,b) => b.sc - a.sc);
-        let res = [], harmonicNodes = [], meanNodes = [];
+        let res = [], chaosNodes = [], reboundNodes = [];
 
-        // 1. 諧波節點 (4碼)
-        sorted.filter(p => p.sc >= 40000).slice(0, 4).forEach(p => { res.push(p.n); harmonicNodes.push(p.n); });
+        // 1. 斷層反彈 (4碼)
+        sorted.filter(p => p.sc >= 50000).slice(0, 4).forEach(p => { res.push(p.n); chaosNodes.push(p.n); });
 
-        // 2. 均值修正位 (3碼)
-        let meanPicks = sorted.filter(p => !res.includes(p.n) && p.gap >= 4 && p.gap <= 9).slice(0, 3);
-        meanPicks.forEach(p => { res.push(p.n); meanNodes.push(p.n); });
+        // 2. 真空補償 (3碼)
+        sorted.filter(p => !res.includes(p.n) && p.gap >= 10).slice(0, 3).forEach(p => { res.push(p.n); reboundNodes.push(p.n); });
 
-        // 3. 區間平衡補齊
+        // 3. 鄰位引信補齊
         let fillers = sorted.filter(p => !res.includes(p.n));
         while(res.length < 10) res.push(fillers.shift().n);
 
-        return { res: res.sort((a,b)=>a-b), harmonicNodes, meanNodes };
+        return { res: res.sort((a,b)=>a-b), chaosNodes, reboundNodes };
     }
 
     function render() {
-        const fullData = [...state.data], finalPred = getV266Pick(fullData), recent = fullData.slice(-12).reverse();
+        const fullData = [...state.data], finalPred = getV267Pick(fullData), recent = fullData.slice(-12).reverse();
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
-            `<div class="ball ${finalPred.harmonicNodes.includes(n)?'harmonic-node':(finalPred.meanNodes.includes(n)?'mean-node':'active')}">${n}</div>`).join('');
+            `<div class="ball ${finalPred.chaosNodes.includes(n)?'chaos-node':(finalPred.reboundNodes.includes(n)?'rebound-node':'active')}">${n}</div>`).join('');
         
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recent.slice(0, 10).forEach(row => {
             const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
-            const pred = getV266Pick(histUntil);
+            const pred = getV267Pick(histUntil);
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:10px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
