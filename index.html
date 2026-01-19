@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v178</title>
+    <title>AI 539 數據中心 v179</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --mirror: #00f2ff; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --gravity: #ff9f0a; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.mirror-node { border: 2px solid var(--mirror); color: var(--mirror); box-shadow: 0 0 10px rgba(0,242,255,0.3); }
+        .ball.gravity-node { border: 2px solid var(--gravity); color: var(--gravity); box-shadow: 0 0 12px rgba(255,159,10,0.4); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
@@ -27,16 +27,16 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v178)</div>
+        <div class="panel-header">數據注入 (v179)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (鏡像拓撲版)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (相位收縮版)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">青框: 鏡像對稱碼 | 策略: 鏡像催化 + 區間聚類，衝擊 4-5 星</p>
+                <p style="font-size:0.7rem; color:var(--sub);">橘框: 重力井中心碼 | 策略: 區域高度聚類，強攻命中 3-4</p>
             </div>
             <div class="panel" id="panel3">
                 <div class="panel-header">Panel 3: 滾動回測紀錄</div>
@@ -67,8 +67,8 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV178Pick(hist) {
-        if(hist.length < 5) return {res:[], mirrorNodes:[]};
+    function getV179Pick(hist) {
+        if(hist.length < 5) return {res:[], gravityNodes:[]};
         const last = hist[hist.length-1].nums;
         
         let pool = [];
@@ -76,50 +76,48 @@
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            if(gap >= 3 && gap <= 10) score += 12000;
+            if(gap >= 3 && gap <= 8) score += 12000;
             if(last.some(ln => Math.abs(ln-i) === 1)) score += 15000;
-            pool.push({n: i, gap: gap, sc: score});
+            pool.push({n: i, gap: gap, sc: score, t: i%10});
         }
-
-        const getMirror = (n) => {
-            let s = n.toString().padStart(2, '0');
-            let m = parseInt(s.split('').reverse().join(''));
-            return (m >= 1 && m <= 39 && m !== n) ? m : null;
-        };
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let mirrorNodes = [];
+        let gravityNodes = [];
 
+        // 1. 定位兩個重力井中心
+        let cores = sorted.slice(0, 2);
+        cores.forEach(c => {
+            res.push(c.n);
+            gravityNodes.push(c.n);
+            // 2. 拉入半徑內的同尾或鄰號
+            let satellites = pool.filter(p => 
+                !res.includes(p.n) && 
+                (Math.abs(p.n - c.n) <= 3 || p.t === c.t)
+            ).sort((a,b) => b.sc - a.sc).slice(0, 3);
+            
+            satellites.forEach(s => { if(res.length < 8) res.push(s.n); });
+        });
+
+        // 3. 補齊高分碼
         for(let p of sorted) {
-            if(res.length >= 8) break;
-            if(!res.includes(p.n)) {
-                res.push(p.n);
-                let m = getMirror(p.n);
-                if(m && !res.includes(m) && res.length < 8) {
-                    let mData = pool.find(x => x.n === m);
-                    if(mData && mData.gap < 15) { 
-                        res.push(m);
-                        mirrorNodes.push(m);
-                    }
-                }
-            }
+            if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
         }
 
-        return { res: res.slice(0, 8).sort((a,b)=>a-b), mirrorNodes };
+        return { res: res.slice(0, 8).sort((a,b)=>a-b), gravityNodes };
     }
 
     function render() {
-        const finalPred = getV178Pick(state.data);
+        const finalPred = getV17 Pick(state.data);
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>AI 預測</span><span>命中</span></div>`;
         state.data.slice(-10).reverse().forEach((row) => {
             const idx = state.data.findIndex(d => d.date === row.date);
-            const pred = getV178Pick(state.data.slice(0, idx));
+            const pred = getV179Pick(state.data.slice(0, idx));
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span style="color:var(--primary)">${row.nums.join(' ')}</span><span style="font-size:10px">${pred.res.map(n => hits.includes(n)? `<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</span><span class="hit-count">${hits.length}</span></div>`;
         });
-        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => `<div class="ball ${finalPred.mirrorNodes.includes(n)?'mirror-node':'active'}">${n}</div>`).join('');
+        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => `<div class="ball ${finalPred.gravityNodes.includes(n)?'gravity-node':'active'}">${n}</div>`).join('');
         
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
