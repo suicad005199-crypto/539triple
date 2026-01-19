@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 539 數據中心 v166</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --tri: #5ac8fa; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --jump: #30d158; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.tri-node { border: 2px solid var(--tri); color: var(--tri); }
+        .ball.jump-node { border: 2px solid var(--jump); color: var(--jump); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
@@ -34,9 +34,9 @@
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (三點支撐)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (等距補償)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">淺藍框: 支撐節點碼 | 策略: 強制冷熱單元聚合</p>
+                <p style="font-size:0.7rem; color:var(--sub);">綠框: 跳躍補償碼 | 策略: 打破連號限制，衝擊 4 星轉化</p>
             </div>
             <div class="panel" id="panel3">
                 <div class="panel-header">Panel 3: 滾動回測紀錄</div>
@@ -68,42 +68,43 @@
     });
 
     function getV166Pick(hist) {
-        if(hist.length < 5) return {res:[], triNodes:[]};
+        if(hist.length < 5) return {res:[], jumpCodes:[]};
         const last = hist[hist.length-1].nums;
+        
         let pool = [];
-
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
-            if(gap <= 2) score += 7000;
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 8000;
-            if(gap >= 15) score += 4000; // 冷碼加權
-            pool.push({n: i, gap: gap, sc: score, t: i%10});
+            if(gap <= 2) score += 6000;
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 9000;
+            pool.push({n: i, gap: gap, sc: score, t: i%10, z: Math.floor((i-1)/10)});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let triNodes = [];
+        let jumpCodes = [];
 
-        // 三點支撐選取
+        // 核心選取邏輯：優先選取不同區間的高分碼
+        let zonesVisited = new Set();
         for(let p of sorted) {
-            if(res.length >= 8) break;
-            if(!res.includes(p.n)) {
-                res.push(p.n);
-                
-                // 配對 1: 同尾溫碼
-                let tPair = pool.find(x => x.t === p.t && x.n !== p.n && !res.includes(x.n) && x.gap > 4);
-                if(tPair && res.length < 8) {
-                    res.push(tPair.n);
-                    triNodes.push(tPair.n);
-                }
-
-                // 配對 2: 斜連冷碼
-                let cPair = pool.find(x => Math.abs(x.n - p.n) === 1 && !res.includes(x.n) && x.gap > 10);
-                if(cPair && res.length < 8) {
-                    res.push(cPair.n);
-                    triNodes.push(cPair.n);
+            if(res.length < 4) {
+                if(!res.includes(p.n)) {
+                    res.push(p.n);
+                    zonesVisited.add(p.z);
+                    
+                    // 等距跳號偵測：增加差值為 5, 10, 12 的號碼
+                    [5, 10, 12].forEach(diff => {
+                        [p.n - diff, p.n + diff].forEach(target => {
+                            if(target >= 1 && target <= 39 && !res.includes(target) && res.length < 8) {
+                                let tData = pool.find(x => x.n === target);
+                                if(tData && (tData.sc > 4000 || tData.gap > 15)) {
+                                    res.push(target);
+                                    jumpCodes.push(target);
+                                }
+                            }
+                        });
+                    });
                 }
             }
         }
@@ -113,18 +114,16 @@
             if(next) res.push(next.n); else break;
         }
 
-        return { res: res.sort((a,b)=>a-b), triNodes };
+        return { res: res.sort((a,b)=>a-b), jumpCodes };
     }
 
     function render() {
-        const finalPred = getV16Pick(state.data); // 注意：內部函式名修正
-        const finalPredObj = getV166Pick(state.data);
-        
+        const finalPred = getV166Pick(state.data);
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
         tableHtml += `</tr></thead><tbody><tr style="background:#2c2c2e"><td>預測</td>`;
         for(let i=1; i<=39; i++) {
-            let isPred = finalPredObj.res.includes(i);
+            let isPred = finalPred.res.includes(i);
             tableHtml += `<td class="${isPred ? 'pred-mark' : ''}" style="color:var(--primary)">${isPred ? '●' : ''}</td>`;
         }
         tableHtml += `</tr>`;
@@ -154,8 +153,8 @@
                 </div>`;
         });
 
-        document.getElementById('finalCombo').innerHTML = finalPredObj.res.map(n => {
-            let cls = finalPredObj.triNodes.includes(n) ? 'tri-node' : 'active';
+        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => {
+            let cls = finalPred.jumpCodes.includes(n) ? 'jump-node' : 'active';
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
         document.getElementById('mainDisplay').style.display = 'block';
