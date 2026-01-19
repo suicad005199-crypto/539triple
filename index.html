@@ -3,20 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v245</title>
+    <title>AI 539 數據中心 v245.1 (iOS 優化版)</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --resonance: #30d5c8; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; -webkit-font-smoothing: antialiased; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
-        .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); }
+        .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow: hidden; }
         .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--primary); padding-left: 8px; }
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
         .ball.res-node { border: 2px solid var(--resonance); color: var(--resonance); box-shadow: 0 0 8px rgba(48,213,200,0.4); }
-        .matrix-table { width: 100%; border-collapse: collapse; text-align: center; min-width: 900px; }
-        .matrix-table th, .matrix-table td { border: 1px solid var(--border); height: 30px; font-size: 11px; }
+
+        /* Panel 4 iOS 專屬優化表格 */
+        .matrix-wrapper { 
+            width: 100%; 
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch; /* iOS 絲滑滾動 */
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .matrix-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            text-align: center; 
+            table-layout: fixed; /* 強制每一格等寬 */
+            min-width: 1100px; /* 確保 39 碼有足夠空間展開 */
+        }
+        .matrix-table th, .matrix-table td { 
+            border: 1px solid var(--border); 
+            height: 36px; 
+            font-size: 12px; 
+            padding: 0;
+            white-space: nowrap;
+        }
+        .matrix-table th { background: #2c2c2e; color: var(--sub); font-weight: normal; }
+        .matrix-table td.date-col { width: 80px; font-size: 11px; }
         .is-hit { background: var(--hit) !important; color: #fff; font-weight: bold; }
+        
         .bt-row { border-bottom: 1px solid #38383a; padding: 10px 0; display: grid; grid-template-columns: 85px 1fr 1fr 40px; align-items: center; gap: 10px; }
         .hit-count { color: var(--success); font-weight: bold; text-align: right; font-size: 16px; }
     </style>
@@ -25,25 +50,27 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v245 - 相位共振衝擊 3-4 星)</div>
+        <div class="panel-header">數據注入 (v245.1 - iOS UI 優化)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel">
-                <div class="panel-header">Panel 2: 精選 7 碼 (鏡像對稱 + 奇偶嵌套)</div>
+                <div class="panel-header">Panel 2: 精選 7 碼 (相位共振)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">青框：共振核心碼 | 策略：強制鏡像對稱號碼嵌套，解決區塊錯位，衝擊星級深度。</p>
             </div>
             <div class="panel">
                 <div class="panel-header">Panel 3: 10 期滾動回測 (7 碼)</div>
                 <div id="btContainer"></div>
             </div>
         </div>
+        
         <div class="panel">
-            <div class="panel-header">Panel 4: 相位共振分佈矩陣</div>
-            <div style="overflow-x:auto;"><div id="matrixContainer"></div></div>
+            <div class="panel-header">Panel 4: 相位共振分佈矩陣 (iOS 等寬優化)</div>
+            <div class="matrix-wrapper">
+                <div id="matrixContainer"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -69,38 +96,21 @@
         const tails = {};
         hist.slice(-10).forEach(d => d.nums.forEach(n => tails[n%10] = (tails[n%10] || 0) + 1));
         const topTail = Number(Object.entries(tails).sort((a,b)=>b[1]-a[1])[0][0]);
-
         let pool = [];
         for (let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            let sc = (last.some(ln => Math.abs(ln-i) === 1) ? 40000 : 0) + 
-                     (i%10 === topTail ? 35000 : 0) + 
-                     (gap >= 3 && gap <= 7 ? 20000 : 0);
-            pool.push({n: i, sc, t: i%10, b: Math.floor((i-1)/10)});
+            let sc = (last.some(ln => Math.abs(ln-i) === 1) ? 40000 : 0) + (i%10 === topTail ? 35000 : 0) + (gap >= 3 && gap <= 7 ? 20000 : 0);
+            pool.push({n: i, sc, t: i%10});
         }
-
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
         let resNodes = [];
-
-        // 1. 鏡像對稱核心 (2碼)
-        let seed = sorted[0].n;
-        let mirror = 40 - seed;
-        res.push(seed);
-        resNodes.push(seed);
-        if (mirror >= 1 && mirror <= 39 && mirror !== seed) {
-            res.push(mirror);
-            resNodes.push(mirror);
-        }
-
-        // 2. 奇偶同尾嵌套 (2碼)
+        let seed = sorted[0].n; res.push(seed); resNodes.push(seed);
+        let mirror = 40 - seed; if (mirror >= 1 && mirror <= 39 && mirror !== seed) { res.push(mirror); resNodes.push(mirror); }
         let tOdd = sorted.find(p => p.t === topTail && p.n % 2 !== 0 && !res.includes(p.n));
         let tEven = sorted.find(p => p.t === topTail && p.n % 2 === 0 && !res.includes(p.n));
-        if(tOdd) res.push(tOdd.n);
-        if(tEven) res.push(tEven.n);
-
-        // 3. 隔位/連號對 (2碼) - 禁三連
+        if(tOdd) res.push(tOdd.n); if(tEven) res.push(tEven.n);
         for(let p of sorted) {
             if(res.length >= 6) break;
             if(!res.includes(p.n)) {
@@ -111,19 +121,14 @@
                 }
             }
         }
-
-        // 補齊
         let fillers = sorted.filter(p => !res.includes(p.n));
         while(res.length < 7) res.push(fillers.shift().n);
-
         return { res: res.slice(0, 7).sort((a,b)=>a-b), resNodes };
     }
 
     function render() {
         const fullData = [...state.data], finalPred = getV245Pick(fullData), recentForBT = fullData.slice(-12).reverse();
-        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
-            `<div class="ball ${finalPred.resNodes.includes(n)?'res-node':'active'}">${n}</div>`).join('');
-
+        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => `<div class="ball ${finalPred.resNodes.includes(n)?'res-node':'active'}">${n}</div>`).join('');
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
         recentForBT.slice(0, 10).forEach(row => {
@@ -133,13 +138,14 @@
             bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:10px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
         });
 
-        let tableHtml = `<table class="matrix-table"><thead><tr><th style="width:70px">日期</th>`;
+        // Panel 4 核心優化生成
+        let tableHtml = `<table class="matrix-table"><thead><tr><th class="date-col">日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
-        tableHtml += `</tr></thead><tbody><tr style="background:rgba(255,214,10,0.1)"><td>下期預測</td>`;
+        tableHtml += `</tr></thead><tbody><tr style="background:rgba(255,214,10,0.1)"><td>預測</td>`;
         for(let i=1; i<=39; i++) tableHtml += `<td>${finalPred.res.includes(i)?'●':''}</td>`;
         tableHtml += `</tr>`;
         recentForBT.forEach(row => {
-            tableHtml += `<tr><td>${row.date.slice(5)}</td>`;
+            tableHtml += `<tr><td class="date-col">${row.date.slice(5)}</td>`;
             for(let i=1; i<=39; i++) tableHtml += `<td class="${row.nums.includes(i)?'is-hit':''}">${row.nums.includes(i)?i:''}</td>`;
             tableHtml += `</tr>`;
         });
