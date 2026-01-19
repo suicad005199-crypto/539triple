@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v161</title>
+    <title>AI 539 數據中心 v162</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --comp: #ff9f0a; }
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --pair: #0a84ff; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow-x: auto; }
@@ -13,7 +13,7 @@
         .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
         .ball { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid var(--border); }
         .ball.active { background: var(--primary); color: #000; border: none; }
-        .ball.comp { border: 2px solid var(--comp); color: var(--comp); }
+        .ball.pair { border: 2px solid var(--pair); color: var(--pair); }
         .pred-mark { background: rgba(255, 214, 10, 0.15); border: 1px inset var(--primary) !important; }
         table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
         th, td { border: 1px solid #38383a; padding: 6px 2px; }
@@ -28,19 +28,19 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-header">數據注入 (v161)</div>
+        <div class="panel-header">數據注入 (v162)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
     </div>
 
     <div id="mainDisplay" style="display:none;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
             <div class="panel" id="panel2">
-                <div class="panel-header">Panel 2: 下期精準 8 碼 (二階斜連優化)</div>
+                <div class="panel-header">Panel 2: 下期精準 8 碼 (共振成對)</div>
                 <div id="finalCombo" class="ball-row"></div>
-                <p style="font-size:0.7rem; color:var(--sub);">橘框: 補償與二階位移碼 | 策略: 跨期趨勢捕捉</p>
+                <p style="font-size:0.7rem; color:var(--sub);">藍框: 共振鏈結碼 | 策略: 強制成對輸出，提升命中 2 轉化</p>
             </div>
             <div class="panel" id="panel3">
-                <div class="panel-header">Panel 3: 滾動回測紀錄 (前 10 期詳細)</div>
+                <div class="panel-header">Panel 3: 滾動回測紀錄</div>
                 <div id="btContainer"></div>
             </div>
         </div>
@@ -68,10 +68,9 @@
         reader.readAsText(e.target.files[0]);
     });
 
-    function getV161Pick(hist) {
-        if(hist.length < 5) return {res:[], compCodes:[]};
+    function getV162Pick(hist) {
+        if(hist.length < 5) return {res:[], pairCodes:[]};
         const last = hist[hist.length-1].nums;
-        const prev = hist[hist.length-2].nums;
         let pool = [];
 
         for (let i=1; i<=39; i++) {
@@ -79,48 +78,38 @@
             for(let j=hist.length-1; j>=0; j--) { if(!hist[j].nums.includes(i)) gap++; else break; }
             let score = 0;
             if(gap <= 2) score += 5000;
-            
-            // 一階斜連
-            if(last.some(ln => Math.abs(ln-i) === 1)) score += 8000;
-            // 二階斜連趨勢 (跨期位移)
-            last.forEach(ln => {
-                prev.forEach(pn => {
-                    if((ln - pn === 1 && i - ln === 1) || (ln - pn === -1 && i - ln === -1)) score += 4000;
-                });
-            });
-
-            pool.push({n: i, gap: gap, sc: score, z: Math.floor((i-1)/10)});
+            if(last.some(ln => Math.abs(ln-i) === 1)) score += 8000; // 斜連核心
+            pool.push({n: i, gap: gap, sc: score, t: i%10});
         }
 
         let sorted = pool.sort((a,b) => b.sc - a.sc);
         let res = [];
-        let compCodes = [];
-        let zCounts = [0, 0, 0, 0];
+        let pairCodes = [];
 
-        // 動態選取，加入區間平衡
+        // 成對選取邏輯
         for(let p of sorted) {
             if(res.length >= 8) break;
-            
-            // 區間飽和度限制：單一區間不超過 3 碼，除非分數極高
-            if(zCounts[p.z] < 3 || (zCounts[p.z] < 4 && p.sc > 12000)) {
+            if(!res.includes(p.n)) {
                 res.push(p.n);
-                zCounts[p.z]++;
-                if(p.sc > 10000 && p.gap > 10) compCodes.push(p.n); // 標記為補償/高分冷碼
+                
+                // 尋找關聯對 (優先同尾，次選斜連)
+                let pair = pool.find(x => !res.includes(x.n) && (x.t === p.t || Math.abs(x.n - p.n) === 1) && x.sc > 3000);
+                if(pair && res.length < 8) {
+                    res.push(pair.n);
+                    pairCodes.push(pair.n);
+                }
             }
         }
 
-        // 補足 8 碼
-        for(let p of sorted) {
-            if(res.length < 8 && !res.includes(p.n)) res.push(p.n);
-        }
+        // 補足
+        for(let p of sorted) { if(res.length < 8 && !res.includes(p.n)) res.push(p.n); }
 
-        return { res: res.sort((a,b)=>a-b), compCodes };
+        return { res: res.sort((a,b)=>a-b), pairCodes };
     }
 
     function render() {
-        const finalPred = getV161Pick(state.data);
+        const finalPred = getV162Pick(state.data);
         
-        // Panel 4 Table
         let tableHtml = `<table><thead><tr><th>日期</th>`;
         for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
         tableHtml += `</tr></thead><tbody><tr style="background:#2c2c2e"><td>下期預測</td>`;
@@ -141,12 +130,11 @@
         tableHtml += `</tbody></table>`;
         document.getElementById('matrixContainer').innerHTML = tableHtml;
 
-        // Panel 3 BT
         const bt = document.getElementById('btContainer');
         bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎號碼</span><span>AI 預測號碼</span><span>命中</span></div>`;
         state.data.slice(-10).reverse().forEach((row) => {
             const currentDataIdx = state.data.findIndex(d => d.date === row.date);
-            const pred = getV161Pick(state.data.slice(0, currentDataIdx));
+            const pred = getV162Pick(state.data.slice(0, currentDataIdx));
             const hits = pred.res.filter(n => row.nums.includes(n));
             bt.innerHTML += `
                 <div class="bt-row">
@@ -157,9 +145,8 @@
                 </div>`;
         });
 
-        // Panel 2 Combo
         document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => {
-            let cls = finalPred.compCodes.includes(n) ? 'comp' : 'active';
+            let cls = finalPred.pairCodes.includes(n) ? 'pair' : 'active';
             return `<div class="ball ${cls}">${n}</div>`;
         }).join('');
         document.getElementById('mainDisplay').style.display = 'block';
