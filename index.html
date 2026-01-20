@@ -14,35 +14,30 @@
         .panel { background: var(--panel); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
         .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--primary); padding-left: 8px; font-size: 14px; }
         
-        /* Panel 2 專用：4碼一排雙排佈局 */
-        .ball-grid { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 12px; 
-            max-width: 250px; 
-            margin: 0 auto; 
-        }
-        .ball { 
-            width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; 
-            background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); font-size: 16px; 
-        }
+        /* Panel 2 佈局 */
+        .ball-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 250px; margin: 0 auto; }
+        .ball { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); font-size: 16px; }
         .ball.phase-node { border: 2px solid var(--phase); color: var(--phase); }
         .ball.balance-node { border: 2px solid var(--odd); color: var(--odd); }
         
-        /* 表格與輔助樣式 */
+        /* 表格樣式 */
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { border: 1px solid var(--border); padding: 10px 4px; text-align: center; }
-        .matrix-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        th { background: #2c2c2e; }
+        
+        .predict-row { background: rgba(255, 214, 10, 0.1); }
         .is-hit { background: var(--hit) !important; color: #fff; font-weight: bold; }
         .hit-count { color: var(--success); font-weight: bold; font-size: 16px; }
         .small-pred { font-size: 10px; color: var(--sub); line-height: 1.4; word-break: break-all; }
         .small-pred b { color: var(--hit); border-bottom: 1px solid var(--hit); }
+        
+        .matrix-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <div class="panel-header">數據注入 (v261 - 相位 8 碼策略)</div>
+        <div class="panel-header">數據注入 (v261 - 1+5 模式)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub); width:100%;">
     </div>
 
@@ -50,17 +45,14 @@
         <div class="panel">
             <div class="panel-header">精選 8 碼 (4x2 相位修正)</div>
             <div id="finalCombo" class="ball-grid"></div>
-            <div style="margin-top:15px; text-align:center; font-size:11px; color:var(--sub);">
-                藍圈: 相位碼 | 橘圈: 平衡碼
-            </div>
         </div>
 
         <div class="panel">
-            <div class="panel-header">近 5 期回測 (8 碼追蹤)</div>
+            <div class="panel-header">回測與預測追蹤 (最新 1 + 歷史 5)</div>
             <div id="btContainer">
                 <table>
                     <thead>
-                        <tr><th>日期</th><th>開獎</th><th>8碼預測比對</th><th>星</th></tr>
+                        <tr><th>日期</th><th>開獎號碼</th><th>8碼預測比對</th><th>星</th></tr>
                     </thead>
                     <tbody id="p3Body"></tbody>
                 </table>
@@ -68,9 +60,9 @@
         </div>
 
         <div class="panel">
-            <div class="panel-header">軌跡矩陣 (1-39 視覺化)</div>
+            <div class="panel-header">軌跡矩陣 (相位偵測)</div>
             <div class="matrix-wrapper">
-                <table id="matrixTable">
+                <table>
                     <thead id="matrixHead"><tr><th>日期</th></tr></thead>
                     <tbody id="matrixBody"></tbody>
                 </table>
@@ -81,7 +73,6 @@
     <script>
         const state = { data: [] };
 
-        // 矩陣 1-39 標頭初始化
         const mHead = document.getElementById('matrixHead').rows[0];
         for(let i=1; i<=39; i++) {
             let th = document.createElement('th');
@@ -102,9 +93,6 @@
             reader.readAsText(e.target.files[0]);
         });
 
-        /**
-         * v261 相位策略 - 修正為 8 碼輸出
-         */
         function getV261Pick8(hist) {
             if(hist.length < 5) return {res:[], phaseNodes:[], balanceNodes:[]};
             const last = hist[hist.length-1].nums;
@@ -118,16 +106,11 @@
             }
             let sorted = pool.sort((a,b) => b.sc - a.sc);
             let res = [], phaseNodes = [], balanceNodes = [];
-            
-            // 核心相位 (前 5 碼)
             sorted.slice(0, 5).forEach(p => { res.push(p.n); phaseNodes.push(p.n); });
-            
-            // 奇偶平衡修正 (補至 8 碼)
             let currentOdd = res.filter(n => n%2!==0).length;
             let fillers = pool.filter(p => !res.includes(p.n));
             for(let p of fillers) {
                 if(res.length >= 8) break;
-                // 優先補足平衡性，若已平衡則依權重補滿
                 if((currentOdd < 4 && p.odd) || (currentOdd >= 4 && !p.odd) || res.length < 6) {
                     res.push(p.n); balanceNodes.push(p.n); if(p.odd) currentOdd++;
                 }
@@ -139,20 +122,31 @@
             const full = state.data;
             const latest = getV261Pick8(full);
             const recent = [...full].reverse();
-
-            // P2: 4x2 雙排球顯示
+            
+            // P2: 4x2 顯示
             document.getElementById('finalCombo').innerHTML = latest.res.map(n => 
                 `<div class="ball ${latest.phaseNodes.includes(n)?'phase-node':'balance-node'}">${n}</div>`
             ).join('');
 
-            // P3: 近 5 期 8 碼回測
-            let p3h = "";
+            // 計算預測日期 (+1)
+            const lastD = new Date(recent[0].date);
+            lastD.setDate(lastD.getDate() + 1);
+            const nextDateStr = `${lastD.getMonth()+1}/${lastD.getDate()}`;
+
+            // P3: 1 (預測) + 5 (回測)
+            let p3h = `<tr class="predict-row">
+                <td>${nextDateStr}</td>
+                <td style="color:var(--primary)">待開獎</td>
+                <td class="small-pred">${latest.res.join(' ')}</td>
+                <td>-</td>
+            </tr>`;
+            
             recent.slice(0, 5).forEach((row, idx) => {
                 const histUntil = full.slice(0, full.length - 1 - idx);
                 const pred = getV261Pick8(histUntil);
                 const hits = pred.res.filter(n => row.nums.includes(n));
                 p3h += `<tr>
-                    <td>${row.date.slice(5)}</td>
+                    <td>${row.date.slice(5).replace('-','/')}</td>
                     <td>${row.nums.join(' ')}</td>
                     <td class="small-pred">${pred.res.map(n => row.nums.includes(n) ? `<b>${n}</b>` : n).join(' ')}</td>
                     <td class="hit-count">${hits.length}</td>
@@ -160,7 +154,7 @@
             });
             document.getElementById('p3Body').innerHTML = p3h;
 
-            // P4: 軌跡矩陣 (保留歷史)
+            // P4: 軌跡矩陣
             let p4h = "";
             recent.slice(0, 15).forEach(row => {
                 p4h += `<tr><td>${row.date.slice(5)}</td>`;
