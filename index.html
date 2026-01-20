@@ -1,586 +1,133 @@
-<script>
-// 全局數據存儲
-let data = [];
-let analysisCache = null;
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 539 數據中心 v261</title>
+    <style>
+        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --phase: #007aff; --odd: #ff9f0a; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 14px; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
+        .panel { background: var(--panel); border-radius: 12px; padding: 15px; border: 1px solid var(--border); overflow: hidden; }
+        .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--primary); padding-left: 8px; }
+        .ball-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+        .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); }
+        .ball.active { background: var(--primary); color: #000; border: none; }
+        .ball.phase-node { border: 2px solid var(--phase); color: var(--phase); box-shadow: 0 0 10px rgba(0,122,255,0.4); }
+        .ball.balance-node { border: 2px solid var(--odd); color: var(--odd); }
+        .matrix-wrapper { width: 100%; overflow-x: auto; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); }
+        .matrix-table { width: 100%; border-collapse: collapse; text-align: center; table-layout: fixed; min-width: 1100px; }
+        .matrix-table th, .matrix-table td { border: 1px solid var(--border); height: 34px; font-size: 11px; }
+        .is-hit { background: var(--hit) !important; color: #fff; font-weight: bold; }
+        .bt-row { border-bottom: 1px solid #38383a; padding: 8px 0; display: grid; grid-template-columns: 80px 1fr 1fr 40px; align-items: center; gap: 10px; }
+        .hit-count { color: var(--success); font-weight: bold; text-align: right; font-size: 16px; }
+    </style>
+</head>
+<body>
 
-// 點擊收合功能
-document.getElementById('toggleLogic').addEventListener('click', function() {
-  const content = document.getElementById('logicContent');
-  content.style.display = (content.style.display === 'none') ? 'block' : 'none';
-});
+<div class="container">
+    <div class="panel">
+        <div class="panel-header">數據注入 (v261 - 相位修正策略)</div>
+        <input type="file" id="csvFile" accept=".csv" style="color:var(--sub);">
+    </div>
 
-// 文件加載
-document.getElementById("csvInput").addEventListener("change", function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = function(event) {
-    try {
-      const content = event.target.result.trim();
-      const lines = content.split(/\r?\n/);
-      
-      data = [];
-      lines.forEach((line, index) => {
-        if (index === 0) return; // 跳過標題行
+    <div id="mainDisplay" style="display:none;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
+            <div class="panel">
+                <div class="panel-header">精選 10 碼 (相位修正 + 奇偶平衡)</div>
+                <div id="finalCombo" class="ball-row"></div>
+                <p style="font-size:0.75rem; color:var(--sub); margin-top:5px;">藍框：相位修正碼 | 橘框：奇偶平衡位 | 策略：修正定位偏差，透過動態奇偶過濾衝擊 4 星臨界點。</p>
+            </div>
+            <div class="panel">
+                <div class="panel-header">10 期回測 (滾動驗證)</div>
+                <div id="btContainer"></div>
+            </div>
+        </div>
         
-        const numbers = line.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num));
-        if (numbers.length >= 5) {
-          data.push(numbers.slice(0, 5)); // 只取前5個號碼
-        }
-      });
-      
-      // 顯示基本信息
-      displayCSVInfo(data);
-      
-    } catch (error) {
-      showStatus('csvInfo', `解析錯誤: ${error.message}`, 'error');
-    }
-  };
-  reader.readAsText(file);
-});
+        <div class="panel">
+            <div class="panel-header">軌跡矩陣 (相位偵測模式)</div>
+            <div class="matrix-wrapper"><div id="matrixContainer"></div></div>
+        </div>
+    </div>
+</div>
 
-// 顯示CSV信息
-function displayCSVInfo(data) {
-  const csvInfo = document.getElementById('csvInfo');
-  const basicStats = document.getElementById('basicStats');
-  
-  if (data.length === 0) {
-    showStatus('csvInfo', '未找到有效數據', 'error');
-    basicStats.style.display = 'none';
-    return;
-  }
-  
-  // 計算統計
-  const totalDraws = data.length;
-  const allNumbers = data.flat();
-  const uniqueNumbers = [...new Set(allNumbers)];
-  
-  // 計算平均和值
-  const sums = data.map(draw => draw.reduce((a, b) => a + b, 0));
-  const avgSum = Math.round(sums.reduce((a, b) => a + b, 0) / sums.length);
-  
-  // 計算奇偶比例
-  const oddCount = allNumbers.filter(n => n % 2 === 1).length;
-  const evenCount = allNumbers.length - oddCount;
-  const oddRatio = Math.round((oddCount / allNumbers.length) * 100);
-  
-  // 更新顯示
-  showStatus('csvInfo', `成功載入 ${totalDraws} 期歷史數據，共 ${uniqueNumbers.length} 個不同號碼`, 'success');
-  
-  basicStats.innerHTML = `
-    <div class="stat-item">
-      <div class="stat-label">總期數</div>
-      <div class="stat-value">${totalDraws}</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">使用號碼</div>
-      <div class="stat-value">${uniqueNumbers.length}</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">平均和值</div>
-      <div class="stat-value">${avgSum}</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">奇偶比</div>
-      <div class="stat-value">${oddRatio}% 奇</div>
-    </div>
-  `;
-  basicStats.style.display = 'grid';
-}
+<script>
+    const state = { data: [] };
 
-// 運行分析
-function runAnalysis() {
-  if (data.length === 0) {
-    alert('請先載入CSV數據');
-    return;
-  }
-  
-  const loading = document.getElementById('loadingA');
-  const panelA = document.getElementById('panelA');
-  
-  loading.style.display = 'block';
-  panelA.style.display = 'none';
-  
-  // 模擬分析延遲
-  setTimeout(() => {
-    analysisCache = performAnalysis(data);
-    displayAnalysisResults(analysisCache);
-    
-    loading.style.display = 'none';
-    panelA.style.display = 'block';
-  }, 1500);
-}
-
-// 執行分析計算
-function performAnalysis(data) {
-  const allNumbers = data.flat();
-  const totalDraws = data.length;
-  
-  // 計算每個號碼的統計
-  const numberStats = {};
-  const numberRange = Array.from({length: 49}, (_, i) => i + 1); // 1-49
-  
-  // 初始化統計對象
-  numberRange.forEach(num => {
-    numberStats[num] = {
-      frequency: 0,
-      lastSeen: null,
-      hotness: 0,
-      isHot: false,
-      isCold: false,
-      oddEven: num % 2 === 1 ? '奇' : '偶'
-    };
-  });
-  
-  // 計算出現頻率和最後出現期數
-  data.forEach((draw, drawIndex) => {
-    draw.forEach(num => {
-      numberStats[num].frequency++;
-      numberStats[num].lastSeen = totalDraws - drawIndex - 1;
+    document.getElementById('csvFile').addEventListener('change', e => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const rows = reader.result.trim().split('\n').map(r => r.split(','));
+            state.data = rows.filter(r => r.length >= 2 && !isNaN(r[1])).map(r => ({
+                date: r[0], nums: r.slice(1, 6).map(Number).sort((a,b)=>a-b)
+            }));
+            render();
+        };
+        reader.readAsText(e.target.files[0]);
     });
-  });
-  
-  // 計算熱度（最近100期出現次數）
-  const recentDraws = Math.min(100, totalDraws);
-  const recentData = data.slice(0, recentDraws);
-  const recentNumbers = recentData.flat();
-  
-  numberRange.forEach(num => {
-    const recentFreq = recentNumbers.filter(n => n === num).length;
-    numberStats[num].hotness = recentFreq;
-  });
-  
-  // 確定熱號和冷號
-  const hotThreshold = Math.max(1, Math.floor(recentDraws * 5 / 49 * 1.5));
-  const coldThreshold = Math.max(0, Math.floor(recentDraws * 5 / 49 * 0.5));
-  
-  Object.keys(numberStats).forEach(num => {
-    numberStats[num].isHot = numberStats[num].hotness >= hotThreshold;
-    numberStats[num].isCold = numberStats[num].lastSeen > recentDraws * 2;
-  });
-  
-  // 計算其他統計
-  const sums = data.map(draw => draw.reduce((a, b) => a + b, 0));
-  const avgSum = Math.round(sums.reduce((a, b) => a + b, 0) / sums.length);
-  const minSum = Math.min(...sums);
-  const maxSum = Math.max(...sums);
-  
-  const oddCounts = data.map(draw => draw.filter(n => n % 2 === 1).length);
-  const avgOdd = Math.round(oddCounts.reduce((a, b) => a + b, 0) / oddCounts.length * 10) / 10;
-  
-  // 計算最常出現的號碼
-  const sortedByFreq = Object.entries(numberStats)
-    .sort((a, b) => b[1].frequency - a[1].frequency)
-    .slice(0, 10);
-  
-  // 計算最久未出現的號碼
-  const sortedByLastSeen = Object.entries(numberStats)
-    .sort((a, b) => b[1].lastSeen - a[1].lastSeen)
-    .slice(0, 10);
-  
-  return {
-    numberStats,
-    totalDraws,
-    recentDraws,
-    hotThreshold,
-    coldThreshold,
-    avgSum,
-    minSum,
-    maxSum,
-    avgOdd,
-    topFrequent: sortedByFreq,
-    topMissing: sortedByLastSeen
-  };
-}
 
-// 顯示分析結果
-function displayAnalysisResults(results) {
-  const panelA = document.getElementById('panelA');
-  
-  // 熱號顯示
-  const hotNumbers = Object.entries(results.numberStats)
-    .filter(([num, stat]) => stat.isHot)
-    .map(([num]) => parseInt(num));
-  
-  // 冷號顯示
-  const coldNumbers = Object.entries(results.numberStats)
-    .filter(([num, stat]) => stat.isCold)
-    .map(([num]) => parseInt(num));
-  
-  // 生成HTML
-  panelA.innerHTML = `
-    <div class="box">
-      <div class="box-title">🔥 熱門號碼 (最近${results.recentDraws}期出現${results.hotThreshold}+次)</div>
-      <div class="numbers-grid">
-        ${hotNumbers.map(num => `
-          <div class="number-ball hot">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div class="box">
-      <div class="box-title">❄️ 冷門號碼 (超過${results.recentDraws * 2}期未出現)</div>
-      <div class="numbers-grid">
-        ${coldNumbers.map(num => `
-          <div class="number-ball cold">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div class="stats-row">
-      <div class="stat-item">
-        <div class="stat-label">和值範圍</div>
-        <div class="stat-value">${results.minSum} - ${results.maxSum}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">平均和值</div>
-        <div class="stat-value">${results.avgSum}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">平均奇數</div>
-        <div class="stat-value">${results.avgOdd}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">熱號數量</div>
-        <div class="stat-value">${hotNumbers.length}</div>
-      </div>
-    </div>
-    
-    <div class="box">
-      <div class="box-title">📈 最常出現號碼 (前10名)</div>
-      <div class="numbers-grid">
-        ${results.topFrequent.map(([num, stat]) => `
-          <div class="number-ball" title="出現${stat.frequency}次">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div class="box">
-      <div class="box-title">⏳ 最久未出現號碼 (前10名)</div>
-      <div class="numbers-grid">
-        ${results.topMissing.map(([num, stat]) => `
-          <div class="number-ball" title="遺漏${stat.lastSeen}期">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-// 運行驗證
-function runVerify() {
-  const input = document.getElementById('verifyInput').value.trim();
-  const panelB = document.getElementById('panelB');
-  
-  if (!input) {
-    alert('請輸入要驗證的號碼組合');
-    return;
-  }
-  
-  // 解析輸入的號碼
-  const numbers = input.split(/\s+|,/)
-    .map(num => parseInt(num))
-    .filter(num => !isNaN(num) && num >= 1 && num <= 49);
-  
-  if (numbers.length < 5) {
-    showStatus('panelB', '請輸入至少5個有效號碼(1-49)', 'error');
-    return;
-  }
-  
-  if (new Set(numbers).size !== numbers.length) {
-    showStatus('panelB', '號碼不能重複', 'error');
-    return;
-  }
-  
-  // 進行驗證分析
-  const analysis = verifyCombination(numbers);
-  displayVerifyResults(analysis, numbers);
-  panelB.style.display = 'block';
-}
-
-// 驗證組合
-function verifyCombination(numbers) {
-  if (data.length === 0) {
-    return { error: '請先載入歷史數據' };
-  }
-  
-  // 基本統計
-  const sum = numbers.reduce((a, b) => a + b, 0);
-  const oddCount = numbers.filter(n => n % 2 === 1).length;
-  const evenCount = numbers.length - oddCount;
-  const sorted = [...numbers].sort((a, b) => a - b);
-  const span = sorted[sorted.length - 1] - sorted[0];
-  
-  // 檢查歷史出現情況
-  let appearedTogether = 0;
-  let lastAppeared = null;
-  
-  data.forEach((draw, index) => {
-    const matchCount = numbers.filter(num => draw.includes(num)).length;
-    if (matchCount >= 2) {
-      appearedTogether++;
-    }
-    if (matchCount === numbers.length) {
-      lastAppeared = data.length - index;
-    }
-  });
-  
-  // 計算與歷史和值的比較
-  const historicalSums = data.map(draw => draw.reduce((a, b) => a + b, 0));
-  const avgSum = historicalSums.reduce((a, b) => a + b, 0) / historicalSums.length;
-  const sumDeviation = Math.abs(sum - avgSum);
-  
-  return {
-    sum,
-    oddCount,
-    evenCount,
-    span,
-    appearedTogether,
-    lastAppeared,
-    sumDeviation,
-    avgSum
-  };
-}
-
-// 顯示驗證結果
-function displayVerifyResults(results, numbers) {
-  const panelB = document.getElementById('panelB');
-  
-  panelB.innerHTML = `
-    <div class="box">
-      <div class="box-title">🔢 驗證組合</div>
-      <div class="numbers-grid">
-        ${numbers.map(num => `
-          <div class="number-ball">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div class="stats-row">
-      <div class="stat-item">
-        <div class="stat-label">組合和值</div>
-        <div class="stat-value">${results.sum}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">奇偶比例</div>
-        <div class="stat-value">${results.oddCount}奇${results.evenCount}偶</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">號碼跨度</div>
-        <div class="stat-value">${results.span}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">同時出現</div>
-        <div class="stat-value">${results.appearedTogether}次</div>
-      </div>
-    </div>
-    
-    <div class="status ${results.lastAppeared ? 'warning' : 'success'}">
-      ${results.lastAppeared 
-        ? `⚠️ 此組合曾在 ${results.lastAppeared} 期前開出過` 
-        : '✅ 此組合從未在歷史中開出過'}
-    </div>
-    
-    <div class="status ${results.sumDeviation < 20 ? 'success' : 'warning'}">
-      ${results.sumDeviation < 20 
-        ? `✅ 和值 ${results.sum} 接近歷史平均 ${results.avgSum.toFixed(1)}` 
-        : `⚠️ 和值 ${results.sum} 與歷史平均 ${results.avgSum.toFixed(1)} 差異較大`}
-    </div>
-  `;
-}
-
-// 生成預測
-function generatePrediction() {
-  if (!analysisCache) {
-    alert('請先運行智能分析');
-    return;
-  }
-  
-  const loading = document.getElementById('loadingC');
-  const panelC = document.getElementById('panelC');
-  
-  loading.style.display = 'block';
-  panelC.style.display = 'none';
-  
-  // 模擬生成延遲
-  setTimeout(() => {
-    const prediction = generatePredictionCombination(analysisCache);
-    displayPredictionResults(prediction);
-    
-    loading.style.display = 'none';
-    panelC.style.display = 'block';
-  }, 2000);
-}
-
-// 生成預測組合
-function generatePredictionCombination(analysis) {
-  const { numberStats, avgSum, avgOdd } = analysis;
-  const candidates = [];
-  
-  // 為每個號碼計算得分
-  Object.entries(numberStats).forEach(([num, stat]) => {
-    let score = 0;
-    
-    // 頻率得分
-    score += stat.frequency * 2;
-    
-    // 熱度加分
-    if (stat.isHot) score += 10;
-    
-    // 適當的遺漏期加分（避免太冷或太熱）
-    if (stat.lastSeen > 10 && stat.lastSeen < 50) {
-      score += Math.min(5, stat.lastSeen / 10);
-    }
-    
-    candidates.push({
-      number: parseInt(num),
-      score,
-      stat
-    });
-  });
-  
-  // 按得分排序
-  candidates.sort((a, b) => b.score - a.score);
-  
-  // 初步選擇前15個
-  const topCandidates = candidates.slice(0, 15);
-  
-  // 生成組合
-  let selected = new Set();
-  let attempts = 0;
-  
-  while (selected.size < 5 && attempts < 1000) {
-    // 重置選擇
-    selected.clear();
-    
-    // 隨機選擇5個號碼，但加權高分號碼
-    for (let i = 0; i < 5; i++) {
-      // 加權隨機選擇
-      const rand = Math.random() * topCandidates.reduce((sum, c) => sum + c.score, 0);
-      let cumulative = 0;
-      
-      for (const candidate of topCandidates) {
-        cumulative += candidate.score;
-        if (cumulative >= rand && !selected.has(candidate.number)) {
-          selected.add(candidate.number);
-          break;
+    function getV261Pick(hist) {
+        if(hist.length < 5) return {res:[], phaseNodes:[], balanceNodes:[]};
+        const last = hist[hist.length-1].nums;
+        
+        // 1. 殘差相位分析 (計算鄰位噴發機率)
+        let pool = [];
+        for (let i=1; i<=39; i++) {
+            let gap = 0;
+            for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
+            let drift = last.some(ln => Math.abs(ln-i) === 1) ? 45000 : 0;
+            let sc = drift + (gap >= 5 && gap <= 10 ? 30000 : 0) + (gap === 0 ? 15000 : 0);
+            pool.push({n: i, sc, odd: i%2!==0, gap});
         }
-      }
+        let sorted = pool.sort((a,b) => b.sc - a.sc);
+        let res = [], phaseNodes = [], balanceNodes = [];
+
+        // 2. 核心相位碼 (6碼)
+        sorted.slice(0, 6).forEach(p => { res.push(p.n); phaseNodes.push(p.n); });
+
+        // 3. 奇偶平衡修正 (4碼)
+        let currentOdd = res.filter(n => n%2!==0).length;
+        let fillers = pool.filter(p => !res.includes(p.n)).sort((a,b) => b.sc - a.sc);
+        
+        for(let p of fillers) {
+            if(res.length >= 10) break;
+            if(currentOdd < 5 && p.odd) { res.push(p.n); balanceNodes.push(p.n); currentOdd++; }
+            else if(currentOdd >= 5 && !p.odd) { res.push(p.n); balanceNodes.push(p.n); }
+            else if(res.length < 8) { res.push(p.n); balanceNodes.push(p.n); if(p.odd) currentOdd++; }
+        }
+        
+        while(res.length < 10) res.push(fillers.shift().n);
+
+        return { res: res.sort((a,b)=>a-b), phaseNodes, balanceNodes };
     }
-    
-    // 檢查約束條件
-    const numbers = Array.from(selected);
-    const sum = numbers.reduce((a, b) => a + b, 0);
-    const oddCount = numbers.filter(n => n % 2 === 1).length;
-    const sorted = [...numbers].sort((a, b) => a - b);
-    const span = sorted[sorted.length - 1] - sorted[0];
-    
-    // 約束條件
-    const sumOk = Math.abs(sum - avgSum) < 30;
-    const oddOk = Math.abs(oddCount - avgOdd) < 1.5;
-    const spanOk = span > 20 && span < 40;
-    
-    if (sumOk && oddOk && spanOk) {
-      break;
+
+    function render() {
+        const fullData = [...state.data], finalPred = getV261Pick(fullData), recent = fullData.slice(-12).reverse();
+        document.getElementById('finalCombo').innerHTML = finalPred.res.map(n => 
+            `<div class="ball ${finalPred.phaseNodes.includes(n)?'phase-node':(finalPred.balanceNodes.includes(n)?'balance-node':'active')}">${n}</div>`).join('');
+        
+        const bt = document.getElementById('btContainer');
+        bt.innerHTML = `<div class="bt-row" style="color:var(--sub); border:none"><span>日期</span><span>開獎</span><span>預測</span><span>星</span></div>`;
+        recent.slice(0, 10).forEach(row => {
+            const histUntil = fullData.slice(0, fullData.findIndex(d => d.date === row.date));
+            const pred = getV261Pick(histUntil);
+            const hits = pred.res.filter(n => row.nums.includes(n));
+            bt.innerHTML += `<div class="bt-row"><span>${row.date.slice(5)}</span><span>${row.nums.join(' ')}</span><div style="font-size:10px;">${pred.res.map(n => row.nums.includes(n)?`<b style="color:var(--hit)">${n}</b>`:n).join(' ')}</div><span class="hit-count">${hits.length}</span></div>`;
+        });
+
+        let tableHtml = `<table class="matrix-table"><thead><tr><th style="width:70px">日期</th>`;
+        for(let i=1; i<=39; i++) tableHtml += `<th>${i}</th>`;
+        tableHtml += `</tr></thead><tbody><tr style="background:rgba(255,214,10,0.1)"><td>預測</td>`;
+        for(let i=1; i<=39; i++) tableHtml += `<td>${finalPred.res.includes(i)?'●':''}</td>`;
+        tableHtml += `</tr>`;
+        recent.forEach(row => {
+            tableHtml += `<tr><td>${row.date.slice(5)}</td>`;
+            for(let i=1; i<=39; i++) tableHtml += `<td class="${row.nums.includes(i)?'is-hit':''}">${row.nums.includes(i)?i:''}</td>`;
+            tableHtml += `</tr>`;
+        });
+        document.getElementById('matrixContainer').innerHTML = tableHtml + `</tbody></table>`;
+        document.getElementById('mainDisplay').style.display = 'block';
     }
-    
-    attempts++;
-  }
-  
-  // 如果找不到符合條件的，取前5個高分
-  if (selected.size < 5) {
-    selected = new Set(candidates.slice(0, 5).map(c => c.number));
-  }
-  
-  const finalNumbers = Array.from(selected).sort((a, b) => a - b);
-  
-  return {
-    numbers: finalNumbers,
-    sum: finalNumbers.reduce((a, b) => a + b, 0),
-    oddCount: finalNumbers.filter(n => n % 2 === 1).length,
-    generatedAt: new Date().toLocaleTimeString()
-  };
-}
-
-// 顯示預測結果
-function displayPredictionResults(prediction) {
-  const panelC = document.getElementById('panelC');
-  
-  panelC.innerHTML = `
-    <div class="box">
-      <div class="box-title">🎯 推薦組合</div>
-      <div class="numbers-grid">
-        ${prediction.numbers.map(num => `
-          <div class="number-ball">${num}</div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div class="stats-row">
-      <div class="stat-item">
-        <div class="stat-label">組合和值</div>
-        <div class="stat-value">${prediction.sum}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">奇偶分佈</div>
-        <div class="stat-value">${prediction.oddCount}奇${5 - prediction.oddCount}偶</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">生成時間</div>
-        <div class="stat-value">${prediction.generatedAt}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">組合數</div>
-        <div class="stat-value">1組</div>
-      </div>
-    </div>
-    
-    <div class="status success">
-      💡 建議：此組合基於歷史數據的統計特徵生成，符合常見的和值範圍與奇偶比例
-    </div>
-    
-    <div class="box">
-      <div class="box-title">📋 組合特徵</div>
-      <ul style="padding-left: 20px; color: #8da1b9;">
-        <li>和值：${prediction.sum} (中等範圍)</li>
-        <li>奇偶比：${prediction.oddCount}:${5 - prediction.oddCount}</li>
-        <li>號碼分佈：${prediction.numbers.join(', ')}</li>
-        <li>基於熱號與統計平衡生成</li>
-      </ul>
-    </div>
-  `;
-}
-
-// 顯示狀態消息
-function showStatus(elementId, message, type = 'info') {
-  const element = document.getElementById(elementId);
-  element.innerHTML = message;
-  element.className = `status ${type}`;
-}
-
-// 初始化示例數據（用於測試）
-function loadSampleData() {
-  // 生成一些示例數據
-  const sampleData = [];
-  for (let i = 0; i < 100; i++) {
-    const draw = [];
-    while (draw.length < 5) {
-      const num = Math.floor(Math.random() * 49) + 1;
-      if (!draw.includes(num)) {
-        draw.push(num);
-      }
-    }
-    sampleData.push(draw.sort((a, b) => a - b));
-  }
-  
-  data = sampleData;
-  displayCSVInfo(data);
-}
-
-// 頁面加載完成後可選加載示例數據
-window.addEventListener('DOMContentLoaded', () => {
-  // 可以選擇加載示例數據或留空
-  // loadSampleData(); // 取消註釋以加載示例數據
-});
-
 </script>
+</body>
+</html>
