@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 逐期回測系統</title>
-    
+    <title>AI 逐期回測系統 - 命中標色版</title>
     <style>
         :root {
             --ios-blue: #007AFF;
@@ -19,7 +18,6 @@
             background: var(--ios-bg);
             margin: 0;
             padding: 15px 15px 50px;
-            color: #000;
         }
 
         .panel {
@@ -39,41 +37,36 @@
             justify-content: space-between;
         }
 
-        /* 表格與滾動設定 */
-        .auto-scroll {
-            max-height: 350px;
-            overflow-y: auto;
-            scroll-behavior: smooth;
-        }
+        .auto-scroll { max-height: 350px; overflow-y: auto; scroll-behavior: smooth; }
 
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            font-size: 12px;
-        }
+        table { border-collapse: collapse; width: 100%; font-size: 12px; }
+        th, td { border-bottom: 0.5px solid #E5E5EA; padding: 10px 4px; text-align: center; }
+        th { position: sticky; top: 0; background: #F8F8F8; z-index: 10; }
 
-        th, td {
-            border-bottom: 0.5px solid #E5E5EA;
-            padding: 10px 4px;
-            text-align: center;
-        }
-
-        th {
-            position: sticky;
-            top: 0;
-            background: #F8F8F8;
-            z-index: 10;
-        }
-
-        /* 顏色標記 */
+        /* 預測列與命中標色 */
         .predict-row { background: var(--predict-gold); font-weight: bold; }
-        .hit-count { color: var(--hit-red); font-weight: bold; font-size: 14px; }
-        .num-highlight { color: var(--ios-blue); font-weight: 500; }
         
-        /* Panel 4 分佈圖 */
-        .num-cell { min-width: 22px; color: #C7C7CC; font-size: 10px; }
-        .hit { background: #FFCC00; color: #000; border-radius: 4px; font-weight: bold; }
+        /* 預測號碼球樣式 */
+        .num-ball {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            line-height: 22px;
+            text-align: center;
+            margin: 0 1px;
+            border-radius: 50%;
+        }
+        
+        /* 命中時的樣式 */
+        .is-hit {
+            background-color: var(--hit-red);
+            color: white;
+            font-weight: bold;
+        }
 
+        .hit-count-cell { color: var(--hit-red); font-weight: bold; font-size: 14px; }
+        .num-cell { min-width: 22px; color: #C7C7CC; font-size: 10px; }
+        .grid-hit { background: #FFCC00; color: #000; border-radius: 4px; font-weight: bold; }
         #bestNumbers { font-size: 26px; color: var(--hit-red); font-weight: bold; text-align: center; }
     </style>
 </head>
@@ -85,19 +78,19 @@
     </div>
 
     <div class="panel">
-        <span class="panel-title">PANEL 2: 下期(最新)精準預測</span>
+        <span class="panel-title">PANEL 2: 下期精準預測</span>
         <div id="bestNumbers">等待數據...</div>
     </div>
 
     <div class="panel">
-        <span class="panel-title">PANEL 3: 歷史逐期預測回測 <span style="color:var(--ios-blue)">● 自動滾動中</span></span>
+        <span class="panel-title">PANEL 3: 歷史逐期預測回測 <span style="color:var(--ios-blue)">● 命中自動標色</span></span>
         <div class="auto-scroll" id="p3Scroll">
             <table>
                 <thead>
                     <tr>
                         <th>日期</th>
                         <th>開獎號碼</th>
-                        <th>當期預測</th>
+                        <th>當期預測 (命中標紅)</th>
                         <th>命中</th>
                     </tr>
                 </thead>
@@ -107,7 +100,7 @@
     </div>
 
     <div class="panel">
-        <span class="panel-title">PANEL 4: 連號分佈圖 (1-39)</span>
+        <span class="panel-title">PANEL 4: 分佈圖表 (1-39)</span>
         <div style="overflow-x:auto">
             <table>
                 <thead><tr id="distHeader"><th>日期</th></tr></thead>
@@ -125,7 +118,7 @@
             distHeader.appendChild(th);
         }
 
-        // 模擬策略生成器 (目前為 8 碼隨機，後續可在此替換策略)
+        // 模擬策略
         function strategyGenerator() {
             let res = [];
             while(res.length < 8) {
@@ -150,7 +143,6 @@
 
             if (rows.length === 0) return;
 
-            // 1. 計算最新日期與 Panel 2
             const dates = rows.map(r => new Date(r[0]));
             const maxD = new Date(Math.max.apply(null, dates));
             let nextD = new Date(maxD);
@@ -159,56 +151,54 @@
             const latestPred = strategyGenerator();
             document.getElementById('bestNumbers').innerText = latestPred.join(' ');
 
-            // 2. 排序歷史資料 (降序)
             rows.sort((a, b) => new Date(b[0]) - new Date(a[0]));
 
             let p3h = "";
             let p4h = "";
 
-            // --- 插入最新的預測行 ---
+            // 預測首列
             p3h += `<tr class="predict-row">
                 <td>${nextD.toISOString().split('T')[0]}</td>
                 <td>待開獎</td>
-                <td class="num-highlight">${latestPred.join(' ')}</td>
+                <td>${latestPred.map(n => `<span class="num-ball">${n}</span>`).join('')}</td>
                 <td>-</td>
             </tr>`;
 
-            // --- 逐期生成歷史預測並比對 ---
+            // 歷史逐期比對
             rows.forEach(r => {
                 const date = r[0];
                 const drawNums = r.slice(1).map(n => n.padStart(2, '0'));
-                
-                // 為每一期模擬生成一組預測 (8碼)
                 const historyPred = strategyGenerator();
                 
-                // 計算該期命中數
-                const hitCount = drawNums.filter(n => historyPred.includes(n)).length;
+                // 計算命中並渲染帶有標色的號碼球
+                let hitCount = 0;
+                let predHtml = historyPred.map(n => {
+                    const hit = drawNums.includes(n);
+                    if(hit) hitCount++;
+                    return `<span class="num-ball ${hit ? 'is-hit' : ''}">${n}</span>`;
+                }).join('');
 
-                // Panel 3 內容
                 p3h += `<tr>
                     <td>${date}</td>
                     <td>${drawNums.join(' ')}</td>
-                    <td class="num-highlight">${historyPred.join(' ')}</td>
-                    <td class="hit-count">${hitCount}</td>
+                    <td>${predHtml}</td>
+                    <td class="hit-count-cell">${hitCount}</td>
                 </tr>`;
 
-                // Panel 4 內容
                 let cells = "";
                 for(let i=1; i<=39; i++) {
                     let cur = i.toString().padStart(2, '0');
                     let isHit = drawNums.includes(cur);
-                    cells += `<td class="num-cell ${isHit ? 'hit' : ''}">${isHit ? i : ''}</td>`;
+                    cells += `<td class="num-cell ${isHit ? 'grid-hit' : ''}">${isHit ? i : ''}</td>`;
                 }
                 p4h += `<tr><td>${date}</td>${cells}</tr>`;
             });
 
             document.getElementById('p3Body').innerHTML = p3h;
             document.getElementById('p4Body').innerHTML = p4h;
-            
             startAutoScroll();
         }
 
-        // 自動滾動邏輯
         let scrollInterval;
         function startAutoScroll() {
             const container = document.getElementById('p3Scroll');
@@ -217,7 +207,7 @@
                 if (container.scrollTop + container.clientHeight >= container.scrollHeight) {
                     container.scrollTop = 0;
                 } else {
-                    container.scrollTop += 0.8; // 控制滾動速度
+                    container.scrollTop += 0.8;
                 }
             }, 30);
         }
