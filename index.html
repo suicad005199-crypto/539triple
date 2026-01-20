@@ -2,18 +2,30 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>CSV 預測分析系統 (強化讀取版)</title>
+    <title>CSV 預測與號碼分布系統</title>
     
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 20px; max-width: 950px; margin: auto; background-color: #f9f9f9; }
-        .panel { border: 1px solid #ccc; padding: 20px; border-radius: 10px; background-color: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .panel-title { font-weight: bold; margin-bottom: 15px; display: block; border-left: 5px solid #333; padding-left: 10px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #e0e0e0; padding: 12px; text-align: center; }
-        th { background-color: #f1f1f1; }
+        body { font-family: "Microsoft JhengHei", sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 20px; background-color: #f4f7f6; }
+        .panel { border: 1px solid #ccc; padding: 20px; border-radius: 10px; background-color: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .panel-title { font-weight: bold; margin-bottom: 15px; display: block; border-left: 5px solid #007bff; padding-left: 10px; font-size: 1.1em; }
+        
+        /* 表格基礎樣式 */
+        table { border-collapse: collapse; width: 100%; font-size: 13px; }
+        th, td { border: 1px solid #e0e0e0; padding: 8px; text-align: center; }
+        th { background-color: #f8f9fa; }
+
+        /* Panel 2 特大號碼 */
+        #bestNumbers { font-size: 28px; color: #d9534f; font-weight: bold; text-align: center; padding: 10px; }
+
+        /* Panel 3 預測行 */
         .predict-row { background-color: #fff9e6; font-weight: bold; }
-        .predict-num-text { color: #d9534f; font-size: 1.1em; }
-        #bestNumbers { font-size: 28px; color: #d9534f; font-weight: bold; text-align: center; padding: 15px; }
+        .predict-num-text { color: #d9534f; }
+
+        /* Panel 4 分布圖表專用 */
+        .scroll-container { overflow-x: auto; }
+        .num-cell { width: 20px; color: #ccc; font-size: 11px; }
+        .hit { background-color: #ffc107; color: #000; font-weight: bold; border-radius: 50%; }
+        .ball { display: inline-block; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -21,12 +33,11 @@
     <div class="panel">
         <span class="panel-title">Panel 1: 上傳 CSV 檔案</span>
         <input type="file" id="csvFile" accept=".csv">
-        <p style="font-size: 0.8em; color: #666;">※ 若讀取失敗，請確認檔案為標準 CSV 格式</p>
     </div>
 
     <div class="panel">
-        <span class="panel-title">Panel 2: 下期精準預期號碼</span>
-        <div id="bestNumbers">等待檔案上傳...</div>
+        <span class="panel-title">Panel 2: 下期精準預期號碼 (8碼)</span>
+        <div id="bestNumbers">等待上傳...</div>
     </div>
 
     <div class="panel">
@@ -41,103 +52,110 @@
                         <th>命中數量</th>
                     </tr>
                 </thead>
-                <tbody id="dataTableBody">
-                    <tr><td colspan="4">目前無資料</td></tr>
-                </tbody>
+                <tbody id="dataTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <span class="panel-title">Panel 4: 連號分布圖表 (1-39號)</span>
+        <div class="scroll-container">
+            <table id="distributionTable">
+                <thead>
+                    <tr id="distHeader">
+                        <th>日期</th>
+                        </tr>
+                </thead>
+                <tbody id="distTableBody"></tbody>
             </table>
         </div>
     </div>
 
     <script>
+        // 初始化 Panel 4 標題列 (1-39)
+        const distHeader = document.getElementById('distHeader');
+        for (let i = 1; i <= 39; i++) {
+            let th = document.createElement('th');
+            th.innerText = i.toString().padStart(2, '0');
+            th.className = 'num-cell';
+            distHeader.appendChild(th);
+        }
+
         document.getElementById('csvFile').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
+            // 強化讀取：先嘗試 UTF-8，失敗則嘗試 Big5 (Excel 常見編碼)
             const reader = new FileReader();
-            // 使用 Big5 編碼讀取以防止 Excel 匯出的中文 CSV 亂碼，若無中文可改回 UTF-8
-            reader.readAsText(file, "Big5"); 
-            
-            reader.onload = (event) => {
-                const content = event.target.result;
-                // 如果 Big5 讀取出來是亂碼，嘗試用 UTF-8 重讀
-                if (content.includes('')) {
-                    const utf8Reader = new FileReader();
-                    utf8Reader.readAsText(file, "UTF-8");
-                    utf8Reader.onload = (ev) => processCSVData(ev.target.result);
-                } else {
-                    processCSVData(content);
-                }
-            };
+            reader.onload = (ev) => processData(ev.target.result);
+            reader.readAsText(file, "UTF-8");
         });
 
-        // 產生 8 碼隨機預測
         function generatePrediction8() {
             let nums = [];
             while(nums.length < 8) {
-                let r = Math.floor(Math.random() * 49) + 1;
+                let r = Math.floor(Math.random() * 39) + 1; // 依 1-39 範圍預測
                 let s = r.toString().padStart(2, '0');
                 if(!nums.includes(s)) nums.push(s);
             }
             return nums.sort().join(' ');
         }
 
-        // 解析資料核心
-        function processCSVData(csvText) {
-            // 處理換行符號並分割列
-            let lines = csvText.split(/\r?\n/);
-            let rows = [];
-
-            lines.forEach(line => {
-                let cols = line.split(',').map(c => c.trim().replace(/"/g, ''));
-                // 驗證第一欄是否為有效日期 (排除標題列)
-                if (cols[0] && !isNaN(Date.parse(cols[0])) && !cols[0].includes("日期")) {
-                    rows.push(cols);
-                }
-            });
+        function processData(csvText) {
+            // 解析 CSV 行列，相容逗號或分號
+            let rows = csvText.trim().split(/\r?\n/)
+                .map(line => line.split(/[驗,;]/).map(c => c.trim().replace(/"/g, '')))
+                .filter(cols => !isNaN(Date.parse(cols[0])) && !cols[0].includes("日期"));
 
             if (rows.length === 0) {
-                alert("讀取失敗：找不到有效的日期資料。請檢查 CSV 內容格式。");
+                alert("讀取失敗：格式不正確或無效日期。");
                 return;
             }
 
-            // 1. 找出檔案內最新的日期
+            // 1. 日期邏輯：找出最大日期並 +1
             const allDates = rows.map(r => new Date(r[0]));
             const maxDate = new Date(Math.max.apply(null, allDates));
-            
-            // 2. 計算預測日 (+1天)
             let nextDate = new Date(maxDate);
             nextDate.setDate(nextDate.getDate() + 1);
-            const nextDateStr = `${nextDate.getFullYear()}/${nextDate.getMonth()+1}/${nextDate.getDate()}`;
+            const nextDateStr = nextDate.toISOString().split('T')[0];
 
-            // 3. 準備 Panel 2 預測號碼
-            const predictionStr = generatePrediction8();
-            document.getElementById('bestNumbers').innerText = predictionStr;
+            // 2. 更新 Panel 2
+            const prediction8 = generatePrediction8();
+            document.getElementById('bestNumbers').innerText = prediction8;
 
-            // 4. 歷史資料降序排序
+            // 3. 排序歷史資料 (降序)
             rows.sort((a, b) => new Date(b[0]) - new Date(a[0]));
 
-            // 5. 渲染表格
-            const tbody = document.getElementById('dataTableBody');
-            let html = `
-                <tr class="predict-row">
-                    <td>${nextDateStr}</td>
-                    <td>待開獎</td>
-                    <td class="predict-num-text">${predictionStr}</td>
-                    <td>-</td>
-                </tr>
-            `;
+            // 4. 渲染 Panel 3 & Panel 4
+            const p3Body = document.getElementById('dataTableBody');
+            const p4Body = document.getElementById('distTableBody');
+            let p3Html = "";
+            let p4Html = "";
 
+            // 插入首行 (預測日)
+            p3Html += `<tr class="predict-row"><td>${nextDateStr}</td><td>待開獎</td><td class="predict-num-text">${prediction8}</td><td>-</td></tr>`;
+            p4Html += `<tr class="predict-row"><td>${nextDateStr}</td>${new Array(39).fill('<td>-</td>').join('')}</tr>`;
+
+            // 插入歷史行
             rows.forEach(columns => {
-                html += `
-                    <tr>
-                        <td>${columns[0]}</td>
-                        <td>${columns.slice(1).join(' ')}</td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
-                `;
+                const date = columns[0];
+                const nums = columns.slice(1); // 假設後面全是獎號
+                
+                // Panel 3
+                p3Html += `<tr><td>${date}</td><td>${nums.join(' ')}</td><td>-</td><td>-</td></tr>`;
+
+                // Panel 4 分布圖邏輯
+                let distCells = "";
+                for (let i = 1; i <= 39; i++) {
+                    let numStr = i.toString().padStart(2, '0');
+                    let isHit = nums.map(n => n.padStart(2, '0')).includes(numStr);
+                    distCells += `<td class="num-cell ${isHit ? 'hit' : ''}">${isHit ? i : ''}</td>`;
+                }
+                p4Html += `<tr><td>${date}</td>${distCells}</tr>`;
             });
-            tbody.innerHTML = html;
+
+            p3Body.innerHTML = p3Html;
+            p4Body.innerHTML = p4Html;
         }
     </script>
 </body>
