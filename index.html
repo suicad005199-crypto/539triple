@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 V.26</title>
+    <title>539 精準分析 V.26.1</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -25,9 +25,9 @@
 <body>
 <div class="container">
     <div class="panel"><div class="panel-header">P1: 數據注入</div><input type="file" id="csvFile" accept=".csv"></div>
-    <div class="panel"><div class="panel-header">P2: 10期回測 (V.26 交叉遞補)</div><table class="bt-table"><tbody id="btBody"></tbody></table></div>
+    <div class="panel"><div class="panel-header">P2: 10期回測 (V.26.1)</div><table class="bt-table"><tbody id="btBody"></tbody></table></div>
     <div class="panel"><div class="panel-header">P3: 下期預測 (8 碼)</div><div id="nextPred" class="ball-row"></div></div>
-    <div class="panel"><div class="panel-header">P5: 策略日誌</div><div id="logBox">V.26 交叉熵邏輯啟動：減少冷區佔位，強化遞補規律...</div></div>
+    <div class="panel"><div class="panel-header">P5: 策略日誌</div><div id="logBox">V.26.1 CSV 讀取修正完畢，交叉熵邏輯啟動...</div></div>
 </div>
 
 <script>
@@ -36,7 +36,8 @@
     function formatDate(dateStr) { const p = dateStr.split(/[-/]/); return p.length >= 3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : dateStr; }
 
     document.getElementById('csvFile').addEventListener('change', e => {
-        const file = e.target.files[file.length-1]; // 確保讀取
+        const file = e.target.files[0];
+        if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
             const rows = reader.result.trim().split('\n');
@@ -45,16 +46,15 @@
             }));
             render();
         };
-        reader.readAsText(e.target.files[0]);
+        reader.readAsText(file);
     });
 
     function getPrediction(history) {
-        if (history.length < 10) return [1,2,11,12,21,22,31,32];
+        if (history.length < 10) return [1,2,3,4,5,6,7,8];
         const last1 = history[history.length - 1].nums;
         const last3 = history.slice(-3);
         let stats = Array(40).fill(0).map((_,i)=>({n:i, s:0, g:0}));
 
-        // 尾數對位 (例如 1尾帶6尾)
         const tails = last3.flatMap(d => d.nums.map(n => n % 10));
         const tFreq = tails.reduce((a, b) => (a[b] = (a[b] || 0) + 1, a), {});
 
@@ -65,24 +65,19 @@
             }
             stats[i].g = gap;
 
-            // V.26 核心權重：交叉熵
-            if (gap === 0) stats[i].s += 380; // 連莊慣性
-            if (gap >= 1 && gap <= 3) stats[i].s += 320; // 超熱
-            if (gap >= 5 && gap <= 9) stats[i].s += 450; // 遞補區 (539最常開出區間)
-            if (gap >= 15) stats[i].s -= 100; // 懲罰純冷號，減少掛0
+            // 核心權重優化
+            if (gap === 0) stats[i].s += 350; // 連莊
+            if (gap >= 1 && gap <= 4) stats[i].s += 300; // 熱區
+            if (gap >= 5 && gap <= 9) stats[i].s += 480; // 黃金遞補區 (核心得分)
+            if (gap >= 15) stats[i].s -= 150; // 降低極冷佔位
 
-            // 尾數連動
             const t = i % 10;
-            if (tFreq[t] >= 2) stats[i].s += 150;
-            if (tFreq[(t + 5) % 10] >= 2) stats[i].s += 100; // 對位尾補償
-
-            // 鄰位感應
-            if (last1.some(ln => Math.abs(ln - i) === 1)) stats[i].s += 200;
+            if (tFreq[t] >= 2) stats[i].s += 120;
+            if (last1.some(ln => Math.abs(ln - i) === 1)) stats[i].s += 220;
 
             stats[i].s += (i * 0.05);
         }
 
-        // 排序選號
         let sorted = stats.slice(1).sort((a,b) => b.s - a.s);
         return sorted.slice(0, 8).map(v => v.n).sort((a, b) => a - b);
     }
@@ -90,16 +85,16 @@
     function render() {
         const pred = getPrediction(rawData);
         document.getElementById('nextPred').innerHTML = pred.map(n => `<div class="ball active">${n}</div>`).join('');
-        let btHtml = ""; let s2 = 0, s3 = 0, s4 = 0, s0 = 0;
+        let btHtml = ""; let s2 = 0, s3 = 0, s0 = 0;
         rawData.slice(-10).reverse().forEach(row => {
             const idx = rawData.findIndex(d => d.date === row.date);
             const p = getPrediction(rawData.slice(0, idx));
             const hits = row.nums.filter(n => p.includes(n));
-            if (hits.length >= 2) s2++; if (hits.length >= 3) s3++; if (hits.length >= 4) s4++; if (hits.length === 0) s0++;
+            if (hits.length >= 2) s2++; if (hits.length >= 3) s3++; if (hits.length === 0) s0++;
             btHtml += `<tr><td class="date-col">${formatDate(row.date)}</td><td class="num-col">${row.nums.join(' ')}</td><td>${p.map(n => row.nums.includes(n) ? `<span class="is-hit">${n}</span>` : n).join(' ')}</td><td class="star-col">${hits.length}</td></tr>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        log(`V.26 回測：2星 ${s2*10}% | 3星 ${s3*10}% | 掛0期數: ${s0}`);
+        log(`V.26.1 測試完成。`);
     }
 </script>
 </body>
