@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 V.49</title>
+    <title>539 精準分析 V.50</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -23,9 +23,9 @@
 </head>
 <body>
 <div class="container">
-    <div class="panel"><div class="panel-header">P1: 數據注入 (V.49 熱點倍增)</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P1: 數據注入 (V.50 區塊共振)</div><input type="file" id="csvFile" accept=".csv"></div>
     <div class="panel"><div class="panel-header">P2: 綜合回測看板</div><div id="btBody"></div></div>
-    <div class="panel"><div class="panel-header">P3: 三星衝擊預測 (8 碼)</div><div id="nextPred" class="ball-row"></div></div>
+    <div class="panel"><div class="panel-header">P3: 最終三星爆發預測 (8 碼)</div><div id="nextPred" class="ball-row"></div></div>
     <div class="panel"><div id="logBox">等待 CSV 匯入...</div></div>
 </div>
 
@@ -34,50 +34,63 @@
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     const pad = (n) => n.toString().padStart(2, '0');
 
-    function getV49Prediction(hist) {
+    function getV50Prediction(hist) {
         if(hist.length < 20) return [1,2,3,4,5,6,7,8];
         let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0 }));
         const lastRow = hist[hist.length-1].nums;
         
-        // 1. 核心權重
+        // 1. 權重基礎：遺漏值 (V.42 穩定版)
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) {
                 if(!hist[k].nums.includes(i)) gap++; else break;
             }
-            stats[i].score += (gap <= 10) ? (gap * 4) : Math.max(0, 35 - gap); 
+            stats[i].score += (gap <= 10) ? (gap * 3.5) : Math.max(0, 35 - gap); 
         }
 
-        // 2. 鄰位與連莊加權
+        // 2. 尾數加權
+        let tailMap = Array(10).fill(0);
+        hist.slice(-15).forEach(d => d.nums.forEach(n => tailMap[n%10]++));
+        for(let i=1; i<=39; i++) stats[i].score += (tailMap[i%10] * 5);
+
+        // 3. 連莊/鄰位共振
         lastRow.forEach(ln => {
-            stats[ln].score += 20; 
-            if(ln > 1) stats[ln-1].score += 40; 
-            if(ln < 39) stats[ln+1].score += 40; 
+            stats[ln].score += 25;
+            if(ln > 1) stats[ln-1].score += 35;
+            if(ln < 39) stats[ln+1].score += 35;
         });
 
-        // 3. 倍增套件邏輯：選取 4 個最高分核心，並強制配對
+        // 4. 區塊鏈核心邏輯 (3-3-2)
         let sorted = stats.filter(x => x.n > 0).sort((a,b) => b.score - a.score);
         let finalPool = [];
-        let checked = new Set();
+        let used = new Set();
 
-        for(let i=0; i<sorted.length && finalPool.length < 8; i++) {
-            let core = sorted[i].n;
-            if(checked.has(core)) continue;
+        function addBlock(core, size) {
+            let block = [core];
+            if (size >= 2) {
+                let neighbors = [];
+                if (core > 1) neighbors.push(core - 1);
+                if (core < 39) neighbors.push(core + 1);
+                neighbors.sort((a,b) => stats[b].score - stats[a].score);
+                if (neighbors[0]) block.push(neighbors[0]);
+            }
+            if (size >= 3) {
+                let neighbors = [];
+                if (core > 2) neighbors.push(core - 2);
+                if (core < 38) neighbors.push(core + 2);
+                neighbors.sort((a,b) => stats[b].score - stats[a].score);
+                if (neighbors[0]) block.push(neighbors[0]);
+            }
+            block.forEach(n => { if (finalPool.length < 8 && !used.has(n)) { finalPool.push(n); used.add(n); } });
+        }
 
-            finalPool.push(core);
-            checked.add(core);
-
-            // 尋找該核心最強的鄰居 (左右或同尾)
-            let neighbors = [];
-            if(core > 1) neighbors.push(stats[core-1]);
-            if(core < 39) neighbors.push(stats[core+1]);
-            // 同尾鄰居
-            for(let j=1; j<=39; j++) if(j !== core && j%10 === core%10) neighbors.push(stats[j]);
-
-            let bestNeighbor = neighbors.filter(n => !checked.has(n.n)).sort((a,b) => b.score - a.score)[0];
-            if(bestNeighbor && finalPool.length < 8) {
-                finalPool.push(bestNeighbor.n);
-                checked.add(bestNeighbor.n);
+        // 依序建立 3 碼、3 碼、2 碼區塊
+        for(let s of [3, 3, 2]) {
+            for(let i=0; i<sorted.length; i++) {
+                if(!used.has(sorted[i].n)) {
+                    addBlock(sorted[i].n, s);
+                    break;
+                }
             }
         }
         
@@ -92,29 +105,29 @@
                 return { date: c[0].trim(), nums: c.slice(1, 6).map(x => parseInt(x.trim())).filter(x => !isNaN(x)).sort((a,b)=>a-b) };
             }).filter(r => r.nums.length === 5);
             document.getElementById('logBox').innerHTML = "";
-            runV49();
+            runV50();
         };
         reader.readAsText(e.target.files[0]);
     });
 
-    function runV49() {
+    function runV50() {
         let btHtml = "";
         let counts = { 0:0, 1:0, 2:0, 3:0, 4:0 };
         rawData.slice(-10).reverse().forEach(row => {
-            const p = getV49Prediction(rawData.slice(0, rawData.indexOf(row)));
+            const p = getV50Prediction(rawData.slice(0, rawData.indexOf(row)));
             const hits = row.nums.filter(n => p.includes(n));
             counts[Math.min(hits.length, 4)]++;
             btHtml += `<div class="bt-row">
                 <div class="bt-meta"><span>📅 ${row.date}</span> <span class="star-tag">${hits.length} ★</span></div>
-                <div class="num-group"><span style="width:30px;color:#888">開</span>${row.nums.map(n => `<div class="n-box ${p.includes(n)?'hit':''}">${pad(n)}</div>`).join('')}</div>
-                <div class="num-group"><span style="width:30px;color:#888">預</span>${p.map(n => `<div class="n-box" style="color:${row.nums.includes(n)?'var(--primary)':'#888'}">${pad(n)}</div>`).join('')}</div>
+                <div class="num-group">${row.nums.map(n => `<div class="n-box ${p.includes(n)?'hit':''}">${pad(n)}</div>`).join('')}</div>
+                <div class="num-group" style="opacity:0.7">${p.map(n => `<div class="n-box" style="color:${row.nums.includes(n)?'var(--primary)':'#888'}">${pad(n)}</div>`).join('')}</div>
             </div>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        const next = getV49Prediction(rawData);
+        const next = getV50Prediction(rawData);
         document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball">${pad(n)}</div>`).join('');
-        log(`命中率分佈：2星:${counts[2]}期, 3星:${counts[3]}期, 4星:${counts[4]}期`);
-        log(`掛0率: ${counts[0]*10}% | V.49 倍增套件已部署。`);
+        log(`命中分佈：2星:${counts[2]}期, 3星:${counts[3]}期, 4星:${counts[4]}期`);
+        log(`目標校準：正在將 1 星轉化為 3 星區塊。`);
     }
 </script>
 </body>
