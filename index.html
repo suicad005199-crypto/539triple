@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 v.1 - 策略優化版</title>
+    <title>539 精準分析 v.3</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -11,11 +11,11 @@
         .panel { background: var(--panel); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
         .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 8px; border-left: 3px solid var(--primary); padding-left: 6px; font-size: 14px; }
         
-        /* Panel 2: iOS 全覽優化 */
+        /* Panel 2: 無損全覽 */
         .bt-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .bt-table td { border-bottom: 1px solid var(--border); padding: 8px 1px; text-align: center; font-size: 11px; }
         .date-col { width: 38px; color: var(--sub); }
-        .num-col { width: 90px; }
+        .num-col { width: 85px; letter-spacing: -0.5px; }
         .star-col { width: 25px; color: var(--success); font-weight: bold; font-size: 14px; }
         .is-hit { color: var(--hit); font-weight: bold; text-decoration: underline; }
 
@@ -32,7 +32,6 @@
         .m-hit { background: var(--hit); color: #fff; }
 
         #logBox { background: #000; color: #32d74b; padding: 8px; height: 60px; overflow-y: auto; font-family: monospace; font-size: 10px; }
-        input[type="file"] { font-size: 12px; color: var(--sub); }
     </style>
 </head>
 <body>
@@ -60,7 +59,7 @@
 
     <div class="panel">
         <div class="panel-header">P5: 策略日誌</div>
-        <div id="logBox">系統已切換至「動態遺漏偵測 v.2」...</div>
+        <div id="logBox">v.3 雙重濾網系統已就緒...</div>
     </div>
 </div>
 
@@ -70,8 +69,7 @@
     
     function formatDate(dateStr) {
         const parts = dateStr.split(/[-/]/);
-        if (parts.length >= 3) return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
-        return dateStr;
+        return parts.length >= 3 ? `${parseInt(parts[1])}/${parseInt(parts[2])}` : dateStr;
     }
 
     document.getElementById('csvFile').addEventListener('change', e => {
@@ -81,60 +79,73 @@
             rawData = rows.map(r => r.split(',')).filter(r => r.length >= 6).map(r => ({
                 date: r[0].trim(), nums: r.slice(1, 6).map(n => parseInt(n.trim())).sort((a,b)=>a-b)
             }));
-            log(`導入成功。策略：強化溫號與尾數平衡`);
             render();
         };
         reader.readAsText(e.target.files[0]);
     });
 
-    // 核心優化策略 v.2
+    // v.3 強化演算邏輯
     function getPrediction(history) {
         if (history.length < 5) return [1,2,3,4,5,6,7,8]; 
         let scores = Array(40).fill(0);
-        const lastNums = history[history.length-1].nums;
-        const recentTails = history.slice(-5).flatMap(d => d.nums.map(n => n % 10));
+        
+        // 1. 提取近期尾數熱點
+        const tails = history.slice(-5).flatMap(d => d.nums.map(n => n % 10));
+        const tailMap = tails.reduce((a, b) => (a[b] = (a[b] || 0) + 1, a), {});
 
         for(let i=1; i<=39; i++) {
-            // 1. 遺漏偵測 (鎖定 6-12 期溫號)
+            // A. 遺漏權重：鎖定 3-8 期黃金回補期
             let gap = 0;
             for(let k=history.length-1; k>=0; k--) { if(!history[k].nums.includes(i)) gap++; else break; }
-            if(gap >= 6 && gap <= 12) scores[i] += 120;
-            if(gap > 15) scores[i] += 65; 
+            if(gap >= 3 && gap <= 8) scores[i] += 130; 
+            if(gap === 0) scores[i] += 50; // 連莊補正
             
-            // 2. 尾數共振
-            const tailFreq = recentTails.filter(t => t === (i % 10)).length;
-            scores[i] += tailFreq * 25;
+            // B. 尾數權重：增加熱門尾數的機率
+            const t = i % 10;
+            if(tailMap[t]) scores[i] += tailMap[t] * 20;
 
-            // 3. 矩陣區塊鄰位
-            if(lastNums.some(ln => Math.abs(ln-i) === 1)) scores[i] += 35;
-            
-            scores[i] += Math.random() * 12;
+            // C. 區塊補償：避免號碼過度集中
+            if(i <= 10) scores[i] += 10;
+            if(i >= 30) scores[i] += 10;
+
+            scores[i] += Math.random() * 15;
         }
 
-        // 4. 奇偶平衡濾網 (確保 3:5 或 5:3)
+        // 2. 奇偶與分區篩選 (確保號碼質量)
         let candidates = scores.map((s,i)=>({n:i, s})).sort((a,b)=>b.s-a.s);
         let final8 = [];
-        let oddCount = 0;
+        let odd = 0, even = 0;
+        
         for (let c of candidates) {
             if (final8.length < 8) {
                 const isOdd = c.n % 2 !== 0;
-                if (isOdd && oddCount < 5) { final8.push(c.n); oddCount++; }
-                else if (!isOdd && (final8.length - oddCount) < 5) { final8.push(c.n); }
+                // 強制奇偶比 3:5 ~ 5:3
+                if (isOdd && odd < 5) { final8.push(c.n); odd++; }
+                else if (!isOdd && even < 5) { final8.push(c.n); even++; }
             }
         }
         return final8.sort((a,b)=>a-b);
     }
 
     function render() {
-        document.getElementById('nextPred').innerHTML = getPrediction(rawData).map(n => `<div class="ball active">${n}</div>`).join('');
+        const next = getPrediction(rawData);
+        document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball active">${n}</div>`).join('');
+        
         let btHtml = "";
-        rawData.slice(-10).reverse().forEach(row => {
+        let star2 = 0, star3 = 0;
+        const testSet = rawData.slice(-10).reverse();
+
+        testSet.forEach(row => {
             const idx = rawData.findIndex(d => d.date === row.date);
             const pred = getPrediction(rawData.slice(0, idx));
             const hits = row.nums.filter(n => pred.includes(n));
+            if(hits.length >= 2) star2++;
+            if(hits.length >= 3) star3++;
+
             btHtml += `<tr><td class="date-col">${formatDate(row.date)}</td><td class="num-col">${row.nums.join(' ')}</td><td>${pred.map(n => row.nums.includes(n)?`<span class="is-hit">${n}</span>`:n).join(' ')}</td><td class="star-col">${hits.length}</td></tr>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
+        log(`回測完成：2星率 ${star2*10}% / 3星率 ${star3*10}%`);
 
         let mHtml = `<table class="matrix-table">`;
         rawData.slice(-15).reverse().forEach(row => {
@@ -143,7 +154,6 @@
             mHtml += `</tr>`;
         });
         document.getElementById('matrixContainer').innerHTML = mHtml + `</table>`;
-        log(`回測完成，請檢查命中率改善狀況。`);
     }
 </script>
 </body>
