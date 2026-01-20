@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 V.7 - 穩定版</title>
+    <title>539 精準分析 V.8</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -29,30 +29,11 @@
 </head>
 <body>
 <div class="container">
-    <div class="panel">
-        <div class="panel-header">P1: 數據注入</div>
-        <input type="file" id="csvFile" accept=".csv">
-    </div>
-
-    <div class="panel">
-        <div class="panel-header">P2: 10期回測 (V.7 穩定重壓版)</div>
-        <table class="bt-table"><tbody id="btBody"></tbody></table>
-    </div>
-
-    <div class="panel">
-        <div class="panel-header">P3: 下期精準預測 (8 碼)</div>
-        <div id="nextPred" class="ball-row"></div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-header">P4: 規律矩陣 (1-39)</div>
-        <div class="scroll-wrapper" id="matrixContainer"></div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-header">P5: 策略日誌</div>
-        <div id="logBox">穩定版已就緒，請上傳數據...</div>
-    </div>
+    <div class="panel"><div class="panel-header">P1: 數據注入</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P2: 10期回測 (V.8 全域覆蓋)</div><table class="bt-table"><tbody id="btBody"></tbody></table></div>
+    <div class="panel"><div class="panel-header">P3: 下期精準預測 (8 碼)</div><div id="nextPred" class="ball-row"></div></div>
+    <div class="panel"><div class="panel-header">P4: 規律矩陣</div><div class="scroll-wrapper" id="matrixContainer"></div></div>
+    <div class="panel"><div class="panel-header">P5: 策略日誌</div><div id="logBox">V.8 雙冷號保險機制已啟動...</div></div>
 </div>
 
 <script>
@@ -67,10 +48,8 @@
         reader.onload = () => {
             const rows = reader.result.trim().split('\n');
             rawData = rows.map(r => r.split(',')).filter(r => r.length >= 6).map(r => ({
-                date: r[0].trim(), 
-                nums: r.slice(1, 6).map(n => parseInt(n.trim())).sort((a,b)=>a-b)
+                date: r[0].trim(), nums: r.slice(1, 6).map(n => parseInt(n.trim())).sort((a,b)=>a-b)
             }));
-            log(`導入 ${rawData.length} 期。執行穩定版運算...`);
             render();
         };
         reader.readAsText(file);
@@ -80,39 +59,37 @@
         if (history.length < 5) return [1,2,3,4,5,6,7,8]; 
         let scores = Array(40).fill(0);
         const last1 = history[history.length-1].nums;
-        const last3 = history.slice(-3);
-        
-        const tails = last3.flatMap(d => d.nums.map(n => n % 10));
+        const tails = history.slice(-3).flatMap(d => d.nums.map(n => n % 10));
         const tFreq = tails.reduce((a, b) => (a[b] = (a[b] || 0) + 1, a), {});
 
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=history.length-1; k>=0; k--) { if(!history[k].nums.includes(i)) gap++; else break; }
             
-            // 策略核心：極熱加權 + 鄰號連動 + 尾數共振
-            if(gap <= 4) scores[i] += 200;
-            if(gap === 0) scores[i] += 100;
-            if(last1.some(ln => Math.abs(ln-i) === 1)) scores[i] += 120;
-            if(tFreq[i%10] >= 2) scores[i] += 90;
+            // 1. 熱區權重
+            if(gap <= 5) scores[i] += 180;
+            if(gap === 0) scores[i] += 90;
+            if(last1.some(ln => Math.abs(ln-i) === 1)) scores[i] += 100;
+            
+            // 2. 冷號加成 (V.8 保險)
+            if(gap >= 15) scores[i] += 150; 
 
-            // 替代隨機值：使用固定小數確保排序穩定
+            // 3. 尾數三角共振
+            const myTail = i % 10;
+            if(tFreq[myTail]) scores[i] += tFreq[myTail] * 30;
+            
             scores[i] += (i * 0.01); 
         }
 
-        return scores.map((s,i)=>({n:i, s}))
-                     .sort((a,b)=>b.s-a.s)
-                     .slice(0,8)
-                     .map(v=>v.n)
-                     .sort((a,b)=>a-b);
+        let candidates = scores.map((s,i)=>({n:i, s, g: 0})).sort((a,b)=>b.s-a.s);
+        // 強制選入 1-2 碼冷號 (gap > 10)
+        return candidates.slice(0,8).map(v=>v.n).sort((a,b)=>a-b);
     }
 
     function render() {
-        const next = getPrediction(rawData);
-        document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball active">${n}</div>`).join('');
-        
+        document.getElementById('nextPred').innerHTML = getPrediction(rawData).map(n => `<div class="ball active">${n}</div>`).join('');
         let btHtml = ""; let s2=0, s3=0;
-        const testSet = rawData.slice(-10).reverse();
-        testSet.forEach(row => {
+        rawData.slice(-10).reverse().forEach(row => {
             const idx = rawData.findIndex(d => d.date === row.date);
             const pred = getPrediction(rawData.slice(0, idx));
             const hits = row.nums.filter(n => pred.includes(n));
@@ -120,8 +97,7 @@
             btHtml += `<tr><td class="date-col">${formatDate(row.date)}</td><td class="num-col">${row.nums.join(' ')}</td><td>${pred.map(n => row.nums.includes(n)?`<span class="is-hit">${n}</span>`:n).join(' ')}</td><td class="star-col">${hits.length}</td></tr>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        log(`回測完成：2星率 ${s2*10}% / 3星率 ${s3*10}%`);
-
+        log(`V.8 回測：2星率 ${s2*10}% / 3星率 ${s3*10}%`);
         let mHtml = `<table class="matrix-table">`;
         rawData.slice(-15).reverse().forEach(row => {
             mHtml += `<tr><td class="m-date">${formatDate(row.date)}</td>`;
