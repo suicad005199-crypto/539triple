@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 539 數據中心 v261 - 精簡版</title>
+    <title>AI 539 數據中心 v261</title>
     <style>
         :root {
             --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --success: #32d74b;
@@ -14,47 +14,53 @@
         .panel { background: var(--panel); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
         .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--primary); padding-left: 8px; font-size: 14px; }
         
-        /* 號碼球樣式 */
-        .ball-row { display: flex; flex-wrap: wrap; gap: 6px; }
-        .ball { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); font-size: 14px; }
+        /* Panel 2 專用：4碼一排雙排佈局 */
+        .ball-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 12px; 
+            max-width: 250px; 
+            margin: 0 auto; 
+        }
+        .ball { 
+            width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; 
+            background: #2c2c2e; border-radius: 50%; font-weight: bold; border: 1px solid var(--border); font-size: 16px; 
+        }
         .ball.phase-node { border: 2px solid var(--phase); color: var(--phase); }
         .ball.balance-node { border: 2px solid var(--odd); color: var(--odd); }
-        .ball.active { background: var(--primary); color: #000; border: none; }
-
-        /* 表格樣式 */
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid var(--border); padding: 12px 4px; text-align: center; }
-        th { background: #2c2c2e; }
         
+        /* 表格與輔助樣式 */
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid var(--border); padding: 10px 4px; text-align: center; }
         .matrix-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .is-hit { background: var(--hit) !important; color: #fff; font-weight: bold; }
         .hit-count { color: var(--success); font-weight: bold; font-size: 16px; }
-        .small-pred { font-size: 10px; color: var(--sub); line-height: 1.4; }
-        .small-pred b { color: var(--hit); }
+        .small-pred { font-size: 10px; color: var(--sub); line-height: 1.4; word-break: break-all; }
+        .small-pred b { color: var(--hit); border-bottom: 1px solid var(--hit); }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <div class="panel-header">數據注入 (v261 - 精簡模式)</div>
+        <div class="panel-header">數據注入 (v261 - 相位 8 碼策略)</div>
         <input type="file" id="csvFile" accept=".csv" style="color:var(--sub); width:100%;">
     </div>
 
     <div id="mainContent" style="display:none;">
         <div class="panel">
-            <div class="panel-header">精選 10 碼 (相位修正 + 奇偶平衡)</div>
-            <div id="finalCombo" class="ball-row"></div>
-            <div style="margin-top:10px; font-size:11px; color:var(--sub);">
-                <span style="color:var(--phase)">藍框: 相位</span> | <span style="color:var(--odd)">橘框: 奇偶</span>
+            <div class="panel-header">精選 8 碼 (4x2 相位修正)</div>
+            <div id="finalCombo" class="ball-grid"></div>
+            <div style="margin-top:15px; text-align:center; font-size:11px; color:var(--sub);">
+                藍圈: 相位碼 | 橘圈: 平衡碼
             </div>
         </div>
 
         <div class="panel">
-            <div class="panel-header">近 5 期回測驗證</div>
+            <div class="panel-header">近 5 期回測 (8 碼追蹤)</div>
             <div id="btContainer">
                 <table>
                     <thead>
-                        <tr><th>日期</th><th>開獎</th><th>預測比對</th><th>星</th></tr>
+                        <tr><th>日期</th><th>開獎</th><th>8碼預測比對</th><th>星</th></tr>
                     </thead>
                     <tbody id="p3Body"></tbody>
                 </table>
@@ -62,9 +68,9 @@
         </div>
 
         <div class="panel">
-            <div class="panel-header">軌跡矩陣 (相位偵測)</div>
+            <div class="panel-header">軌跡矩陣 (1-39 視覺化)</div>
             <div class="matrix-wrapper">
-                <table>
+                <table id="matrixTable">
                     <thead id="matrixHead"><tr><th>日期</th></tr></thead>
                     <tbody id="matrixBody"></tbody>
                 </table>
@@ -75,7 +81,7 @@
     <script>
         const state = { data: [] };
 
-        // 矩陣 1-39 標頭
+        // 矩陣 1-39 標頭初始化
         const mHead = document.getElementById('matrixHead').rows[0];
         for(let i=1; i<=39; i++) {
             let th = document.createElement('th');
@@ -96,7 +102,10 @@
             reader.readAsText(e.target.files[0]);
         });
 
-        function getV261Pick(hist) {
+        /**
+         * v261 相位策略 - 修正為 8 碼輸出
+         */
+        function getV261Pick8(hist) {
             if(hist.length < 5) return {res:[], phaseNodes:[], balanceNodes:[]};
             const last = hist[hist.length-1].nums;
             let pool = [];
@@ -109,12 +118,17 @@
             }
             let sorted = pool.sort((a,b) => b.sc - a.sc);
             let res = [], phaseNodes = [], balanceNodes = [];
-            sorted.slice(0, 6).forEach(p => { res.push(p.n); phaseNodes.push(p.n); });
+            
+            // 核心相位 (前 5 碼)
+            sorted.slice(0, 5).forEach(p => { res.push(p.n); phaseNodes.push(p.n); });
+            
+            // 奇偶平衡修正 (補至 8 碼)
             let currentOdd = res.filter(n => n%2!==0).length;
             let fillers = pool.filter(p => !res.includes(p.n));
             for(let p of fillers) {
-                if(res.length >= 10) break;
-                if((currentOdd < 5 && p.odd) || (currentOdd >= 5 && !p.odd) || res.length < 8) {
+                if(res.length >= 8) break;
+                // 優先補足平衡性，若已平衡則依權重補滿
+                if((currentOdd < 4 && p.odd) || (currentOdd >= 4 && !p.odd) || res.length < 6) {
                     res.push(p.n); balanceNodes.push(p.n); if(p.odd) currentOdd++;
                 }
             }
@@ -123,19 +137,19 @@
 
         function render() {
             const full = state.data;
-            const latest = getV261Pick(full);
+            const latest = getV261Pick8(full);
             const recent = [...full].reverse();
 
-            // P2: 10 碼球
+            // P2: 4x2 雙排球顯示
             document.getElementById('finalCombo').innerHTML = latest.res.map(n => 
-                `<div class="ball ${latest.phaseNodes.includes(n)?'phase-node':(latest.balanceNodes.includes(n)?'balance-node':'active')}">${n}</div>`
+                `<div class="ball ${latest.phaseNodes.includes(n)?'phase-node':'balance-node'}">${n}</div>`
             ).join('');
 
-            // P3: 僅顯示近 5 期
+            // P3: 近 5 期 8 碼回測
             let p3h = "";
             recent.slice(0, 5).forEach((row, idx) => {
                 const histUntil = full.slice(0, full.length - 1 - idx);
-                const pred = getV261Pick(histUntil);
+                const pred = getV261Pick8(histUntil);
                 const hits = pred.res.filter(n => row.nums.includes(n));
                 p3h += `<tr>
                     <td>${row.date.slice(5)}</td>
@@ -146,10 +160,8 @@
             });
             document.getElementById('p3Body').innerHTML = p3h;
 
-            // P4: 軌跡矩陣 (保留較多歷史供觀察)
-            let p4h = `<tr style="background:rgba(255,214,10,0.1)"><td>預測</td>`;
-            for(let i=1; i<=39; i++) p4h += `<td>${latest.res.includes(i)?'●':''}</td>`;
-            p4h += `</tr>`;
+            // P4: 軌跡矩陣 (保留歷史)
+            let p4h = "";
             recent.slice(0, 15).forEach(row => {
                 p4h += `<tr><td>${row.date.slice(5)}</td>`;
                 for(let i=1; i<=39; i++) {
