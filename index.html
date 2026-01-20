@@ -8,7 +8,8 @@
         .panel { border: 1px solid #ccc; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .panel-title { font-weight: bold; margin-bottom: 15px; display: block; border-left: 4px solid #333; padding-left: 10px; }
         table { border-collapse: collapse; width: 100%; }
-        td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f8f9fa; font-weight: bold; }
         .predict-row { background-color: #fff9e6; font-weight: bold; }
         .predict-num { color: #d9534f; }
         #bestNumbers { font-size: 24px; color: #d9534f; font-weight: bold; text-align: center; padding: 10px; min-height: 30px; }
@@ -28,7 +29,21 @@
 
     <div class="panel">
         <span class="panel-title">Panel 3</span>
-        <div id="tableContainer">請先上傳檔案...</div>
+        <div id="tableContainer">
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>開獎號碼</th>
+                        <th>預測號碼</th>
+                        <th>命中數量</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    <tr><td colspan="4">請先上傳檔案...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -43,7 +58,6 @@
             reader.readAsText(file);
         });
 
-        // 模擬產生 8 碼預測邏輯
         function generatePrediction() {
             let nums = [];
             while(nums.length < 8) {
@@ -65,30 +79,26 @@
 
             if (rows.length === 0) return;
 
-            // 1. 產生 8 碼預測
             const prediction8 = generatePrediction();
-            
-            // 2. 更新 Panel 2
             document.getElementById('bestNumbers').innerText = prediction8;
 
-            // 3. 處理 Panel 3 資料
             const lastDataRow = rows[rows.length - 1];
             const lastDate = new Date(lastDataRow[0]);
             lastDate.setDate(lastDate.getDate() + 1);
             const predictDateStr = lastDate.toISOString().split('T')[0];
 
             const reversedRows = [...rows].reverse();
-
-            let html = '<table><tbody>';
+            const tbody = document.getElementById('dataTableBody');
             
-            // 首列：自動帶入 Panel 2 的 8 碼預測
-            html += `<tr class="predict-row">
+            // 建立首列 (最新預測)
+            let html = `<tr class="predict-row">
                 <td>${predictDateStr}</td>
                 <td>待開獎</td>
                 <td class="predict-num">${prediction8}</td>
+                <td>-</td>
             </tr>`;
 
-            // 歷史資料
+            // 建立歷史資料列
             reversedRows.forEach(columns => {
                 const date = columns[0];
                 const numbers = columns.slice(1).join(' ');
@@ -96,11 +106,11 @@
                     <td>${date}</td>
                     <td>${numbers}</td>
                     <td>-</td>
+                    <td>-</td>
                 </tr>`;
             });
 
-            html += '</tbody></table>';
-            document.getElementById('tableContainer').innerHTML = html;
+            tbody.innerHTML = html;
         }
     </script>
 </body>
