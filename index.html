@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 V.21</title>
+    <title>539 精準分析 V.22</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -30,14 +30,15 @@
 <body>
 <div class="container">
     <div class="panel"><div class="panel-header">P1: 數據注入</div><input type="file" id="csvFile" accept=".csv"></div>
-    <div class="panel"><div class="panel-header">P2: 10期回測 (V.21 熱核關聯)</div><table class="bt-table"><tbody id="btBody"></tbody></table></div>
+    <div class="panel"><div class="panel-header">P2: 10期回測 (V.22 質數平衡)</div><table class="bt-table"><tbody id="btBody"></tbody></table></div>
     <div class="panel"><div class="panel-header">P3: 下期精準預測 (8 碼)</div><div id="nextPred" class="ball-row"></div></div>
-    <div class="panel"><div class="panel-header">P4: 規維矩陣</div><div class="scroll-wrapper" id="matrixContainer"></div></div>
-    <div class="panel"><div class="panel-header">P5: 策略日誌</div><div id="logBox">V.21 關聯熱核系統啟動...</div></div>
+    <div class="panel"><div class="panel-header">P4: 規律矩陣</div><div class="scroll-wrapper" id="matrixContainer"></div></div>
+    <div class="panel"><div class="panel-header">P5: 策略日誌</div><div id="logBox">V.22 質數平衡演算法啟動...</div></div>
 </div>
 
 <script>
     let rawData = [];
+    const primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     function formatDate(dateStr) { const p = dateStr.split(/[-/]/); return p.length >= 3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : dateStr; }
 
@@ -56,16 +57,10 @@
     });
 
     function getPrediction(history) {
-        if (history.length < 15) return [1,2,3,4,5,6,7,8];
+        if (history.length < 10) return [2,11,19,23,24,29,31,37];
         let stats = Array(40).fill(0).map((_,i)=>({n:i, s:0, g:0}));
         const last1 = history[history.length - 1].nums;
-        const last10 = history.slice(-10);
         
-        // 1. 尾數頻率分析 (核)
-        const tails = last10.flatMap(d => d.nums.map(n => n % 10));
-        const tFreq = tails.reduce((a, b) => (a[b] = (a[b] || 0) + 1, a), {});
-        const topTails = Object.entries(tFreq).sort((a,b)=>b[1]-a[1]).slice(0, 2).map(x => parseInt(x[0]));
-
         for (let i = 1; i <= 39; i++) {
             let gap = 0;
             for (let k = history.length - 1; k >= 0; k--) {
@@ -73,25 +68,27 @@
             }
             stats[i].g = gap;
 
-            // 核心權重：熱區 + 鄰位
-            if (gap <= 5) stats[i].s += 350;
-            if (gap >= 11 && gap <= 14) stats[i].s += 180; // 易跳轉區卡位
-            if (last1.some(ln => Math.abs(ln - i) === 1)) stats[i].s += 220;
+            // V.22 權重邏輯
+            if (gap <= 4) stats[i].s += 300; // 熱號
+            if (gap >= 5 && gap <= 11) stats[i].s += 200; // 溫號
+            if (gap >= 18) stats[i].s += 150; // 極冷
+            if (primes.includes(i)) stats[i].s += 120; // 質數加成
+            if (last1.some(ln => Math.abs(ln - i) === 1)) stats[i].s += 180; // 鄰號
             
-            // 尾數熱核加成
-            if (topTails.includes(i % 10)) stats[i].s += 150;
-
             stats[i].s += (i * 0.01);
         }
 
         let sorted = stats.slice(1).sort((a,b) => b.s - a.s);
         let final8 = [];
-        
-        // 強制從 Top 尾數中選取
-        let coreTails = sorted.filter(x => topTails.includes(x.n % 10));
-        final8.push(...coreTails.slice(0, 4).map(v => v.n));
 
-        // 剩餘名額由高分號補齊
+        // 強制配置比例：3熱-3溫-2冷/質數
+        let heat = sorted.filter(x => x.g <= 4);
+        let warm = sorted.filter(x => x.g > 4 && x.g <= 11);
+        let special = sorted.filter(x => !final8.includes(x.n)); // 剩餘高分
+
+        final8.push(...heat.slice(0, 3).map(v => v.n));
+        final8.push(...warm.slice(0, 3).map(v => v.n));
+        
         let others = sorted.filter(x => !final8.includes(x.n));
         while(final8.length < 8) final8.push(others.shift().n);
 
@@ -110,7 +107,7 @@
             btHtml += `<tr><td class="date-col">${formatDate(row.date)}</td><td class="num-col">${row.nums.join(' ')}</td><td>${p.map(n => row.nums.includes(n) ? `<span class="is-hit">${n}</span>` : n).join(' ')}</td><td class="star-col">${hits.length}</td></tr>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        log(`V.21 完畢。2星 ${s2*10}% | 3星 ${s3*10}% | 掛0期數 ${s0}`);
+        log(`V.22：2星率 ${s2*10}% | 3星率 ${s3*10}% | 穩定期數提升`);
         let mHtml = `<table class="matrix-table">`;
         rawData.slice(-15).reverse().forEach(row => {
             mHtml += `<tr><td class="m-date">${formatDate(row.date)}</td>`;
