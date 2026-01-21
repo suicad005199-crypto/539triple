@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 MS32.1</title>
+    <title>539 精準分析 MS33</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -20,7 +20,6 @@
         .matrix-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
         .m-table { border-collapse: collapse; white-space: nowrap; width: 100%; }
         .m-table td, .m-table th { border: 1px solid #333; width: 18px; height: 18px; text-align: center; font-size: 9px; }
-        .m-head { background: #2c2c2e; color: var(--primary); position: sticky; top: 0; }
         .m-date { background: #2c2c2e; color: var(--sub); position: sticky; left: 0; width: 50px; z-index: 5; }
         .m-ball { background: var(--hit); border-radius: 50%; width: 12px; height: 12px; display: inline-block; }
         #logBox { background: #000; color: var(--success); padding: 10px; height: 80px; overflow-y: auto; font-family: monospace; font-size: 11px; border: 1px solid var(--border); }
@@ -31,7 +30,7 @@
 <body>
 <div class="container">
     <div class="panel">
-        <div class="panel-header">P1: 數據注入 (MS32.1 校準版)</div>
+        <div class="panel-header">P1: 數據注入 (MS33 防禦版)</div>
         <input type="file" id="csvFile" accept=".csv">
     </div>
     <div class="panel">
@@ -39,7 +38,7 @@
         <div id="btBody"></div>
     </div>
     <div class="panel">
-        <div class="panel-header" style="color:var(--accent)">P3: MS32.1 下期預測 (5 碼)</div>
+        <div class="panel-header" style="color:var(--accent)">P3: MS33 下期預測 (5 碼)</div>
         <div id="nextPred" class="ball-row"></div>
     </div>
     <div class="panel">
@@ -55,24 +54,25 @@
     const pad = (n) => n.toString().padStart(2, '0');
     const formatDate = (s) => { const p = s.split(/[-/]/); return p.length >= 3 ? `${p[1]}/${p[2]}` : s; };
 
-    function getMS321Prediction(hist) {
-        if(hist.length < 15) return [1,2,3,4,5];
+    function getMS33Prediction(hist) {
+        if(hist.length < 20) return [1,2,3,4,5];
         const lastRow = hist[hist.length-1].nums;
         let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0, gap: 0, type: '' }));
-
-        let zones = [0,0,0,0];
-        hist.slice(-5).forEach(d => d.nums.forEach(n => zones[Math.min(Math.floor((n-1)/10), 3)]++));
 
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             stats[i].gap = gap;
             
-            if(lastRow.some(ln => Math.abs(ln-i) === 1)) { stats[i].score += 45; stats[i].type = '鄰'; }
+            // 鄰號邏輯 (加強權重)
+            if(lastRow.some(ln => Math.abs(ln-i) === 1)) { stats[i].score += 50; stats[i].type = '鄰'; }
+            // 跳碼邏輯 (5-14期)
+            if(gap >= 5 && gap <= 14) { stats[i].score += 55; if(!stats[i].type) stats[i].type = '跳'; }
+            // 極冷防禦邏輯 (遺漏 > 18期)
+            if(gap >= 18) { stats[i].score += 45; if(!stats[i].type) stats[i].type = '冷'; }
+            // 熱區邏輯 (近15期出現3次以上)
             let freq = hist.slice(-15).filter(d => d.nums.includes(i)).length;
-            if(freq >= 2 && gap < 5) { stats[i].score += 40; if(!stats[i].type) stats[i].type = '熱'; }
-            if(gap >= 5 && gap <= 12) { stats[i].score += 50; if(!stats[i].type) stats[i].type = '跳'; }
-            if(zones[Math.min(Math.floor((i-1)/10), 3)] === 0) stats[i].score += 20;
+            if(freq >= 3) { stats[i].score += 35; if(!stats[i].type) stats[i].type = '熱'; }
         }
 
         let selected = [];
@@ -81,7 +81,11 @@
             selected.push(...cand.slice(0, count).map(x => x.n));
         };
 
-        pick('跳', 2); pick('鄰', 2); pick('熱', 1);
+        pick('鄰', 2); // 優先鎖定鄰號，維持 MS32.1 的爆發力
+        pick('跳', 1); // 選取最強跳碼
+        pick('冷', 1); // 強制分配 1 碼防禦極冷
+        pick('熱', 1); // 補足熱碼
+        
         while(selected.length < 5) {
             let rem = stats.slice(1).filter(s => !selected.includes(s.n)).sort((a,b)=>b.score-a.score)[0];
             selected.push(rem.n);
@@ -105,7 +109,7 @@
     function run() {
         let btHtml = "";
         rawData.slice(-10).reverse().forEach(row => {
-            const pred = getMS321Prediction(rawData.slice(0, rawData.indexOf(row)));
+            const pred = getMS33Prediction(rawData.slice(0, rawData.indexOf(row)));
             const hits = row.nums.filter(n => pred.includes(n));
             btHtml += `<div class="bt-row">
                 <div class="bt-meta"><span>📅 ${formatDate(row.date)}</span> <span class="star-tag">${hits.length} ★</span></div>
@@ -114,7 +118,7 @@
             </div>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        const next = getMS321Prediction(rawData);
+        const next = getMS33Prediction(rawData);
         document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball">${pad(n)}</div>`).join('');
         
         let mHtml = `<table class="m-table"><thead><tr><th class="m-date">日</th>`;
@@ -126,7 +130,7 @@
             mHtml += `</tr>`;
         });
         document.getElementById('matrixCont').innerHTML = mHtml + `</tbody></table>`;
-        log(`MS32.1 校準完畢 | 5碼模式`);
+        log(`MS33 已啟動 | 引入極冷防禦機制`);
     }
 </script>
 </body>
