@@ -3,23 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539/A.01-MS1 多策略版</title>
+    <title>539/A.01-MS2 多維矩陣版</title>
     <style>
-        :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
+        :root { --bg: #0b0b0c; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 8px; font-size: 13px; }
         .container { display: flex; flex-direction: column; gap: 10px; max-width: 500px; margin: 0 auto; }
         .panel { background: var(--panel); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
         .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 10px; border-left: 3px solid var(--primary); padding-left: 8px; font-size: 14px; }
-        .strategy-tag { float: right; font-size: 10px; background: #5856d6; padding: 2px 6px; border-radius: 4px; color: #fff; }
         
+        /* P2 回測專用樣式 - 修正預測碼顯示 */
+        .bt-row { border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .num-group { display: flex; gap: 6px; margin-top: 6px; }
+        .n-box { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 13px; font-weight: bold; background: #2c2c2e; color: var(--sub); border: 1px solid transparent; }
+        .n-box.is-pred { border-color: var(--accent); color: var(--accent); } /* 預測號碼顯示藍色框 */
+        .n-box.hit { background: var(--primary); color: #000; border-color: var(--primary); } /* 命中顯示黃色 */
+
+        /* P3 預測球 */
         .ball-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 15px 0; background: rgba(10,132,255,0.05); border-radius: 8px; }
-        .ball { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 50%; font-weight: 900; border: 3px solid var(--accent); color: var(--accent); font-size: 22px; box-shadow: 0 0 10px rgba(10,132,255,0.3); }
+        .ball { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 50%; font-weight: 900; border: 3px solid var(--accent); color: var(--accent); font-size: 22px; }
 
-        .bt-row { border-bottom: 1px solid var(--border); padding: 8px 0; }
-        .n-box { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: #2c2c2e; font-size: 11px; font-weight: bold; }
-        .n-box.hit { background: var(--primary); color: #000; }
-        .star-tag { background: var(--success); color: #000; padding: 2px 6px; border-radius: 4px; font-weight: 900; font-size: 10px; }
-
+        /* P4 矩陣 */
         .matrix-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
         .m-table { border-collapse: collapse; white-space: nowrap; width: 100%; }
         .m-table td, .m-table th { border: 1px solid #333; width: 16px; height: 16px; text-align: center; font-size: 9px; }
@@ -27,13 +30,13 @@
         .m-date { background: #2c2c2e; color: var(--sub); position: sticky; left: 0; min-width: 38px; padding-left: 4px; z-index: 5; }
         .m-ball { background: var(--hit); border-radius: 50%; width: 10px; height: 10px; display: inline-block; }
         
-        #logBox { background: #000; color: var(--success); padding: 8px; height: 70px; overflow-y: auto; font-family: monospace; font-size: 11px; border: 1px solid var(--border); border-radius: 8px; margin-top: 5px; }
+        #logBox { background: #000; color: var(--success); padding: 8px; height: 60px; overflow-y: auto; font-family: monospace; font-size: 11px; border: 1px solid var(--border); border-radius: 8px; margin-top: 5px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="panel">
-        <div class="panel-header">P1: 數據注入 <span class="strategy-tag" id="activeStrategy">AUTO-DETECT</span></div>
+        <div class="panel-header">P1: 數據注入 <span style="float:right; font-size:10px; color:var(--success)">MS2-ENGINE</span></div>
         <input type="file" id="csvFile" accept=".csv" style="width: 100%;">
     </div>
 
@@ -43,7 +46,7 @@
     </div>
 
     <div class="panel">
-        <div class="panel-header" style="color:var(--accent)">P3: 多策略精選預測 (5 碼)</div>
+        <div class="panel-header" style="color:var(--accent)">P3: MS2 多維精選預測 (5 碼)</div>
         <div id="nextPred" class="ball-row"></div>
     </div>
 
@@ -52,7 +55,7 @@
         <div class="matrix-scroll" id="matrixCont"></div>
     </div>
 
-    <div id="logBox">MS1 系統就緒...</div>
+    <div id="logBox">MS2 多維矩陣系統就緒...</div>
 </div>
 
 <script>
@@ -61,46 +64,37 @@
     const pad = (n) => n.toString().padStart(2, '0');
     const fmtDate = (dStr) => { const p = dStr.split(/[-/]/); return p.length >= 3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : dStr; };
 
-    // 多策略核心邏輯
-    function runMultiStrategy(hist) {
-        if(hist.length < 10) return [1,2,3,4,5];
-        
+    function getMS2Logic(hist) {
+        if(hist.length < 10) return [01,02,03,04,05];
         let scores = Array(40).fill(0);
-        const last5 = hist.slice(-5);
-        const lastNums = hist[hist.length-1].nums;
+        const lastRow = hist[hist.length-1].nums;
+        const last10 = hist.slice(-10);
 
-        // 策略 A: 叢集規律 (鄰號權重)
-        let clusterWeight = 0;
-        last5.forEach(d => { for(let i=0; i<4; i++) if(d.nums[i+1]-d.nums[i] <= 2) clusterWeight++; });
-        
-        // 策略 B: 溫碼回歸 (Gap 權重)
-        let gapStats = Array(40).fill(0);
+        // 1. 溫碼與遺漏加成
         for(let i=1; i<=39; i++) {
             let g = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) g++; else break; }
-            gapStats[i] = g;
+            if(g >= 3 && g <= 10) scores[i] += 65;
+            if(lastRow.some(n => Math.abs(n - i) === 1)) scores[i] += 50; // 鄰號捕捉
         }
 
-        // 策略執行與得分匯總
-        for(let i=1; i<=39; i++) {
-            // 1. 基礎溫碼分 (3-9期)
-            if(gapStats[i] >= 3 && gapStats[i] <= 9) scores[i] += 60;
-            // 2. 叢集策略補強
-            if(clusterWeight > 5 && lastNums.some(n => Math.abs(n - i) === 1)) scores[i] += 50;
-            // 3. 真空補位 (P4 分布邏輯)
-            let zone = Math.floor((i-1)/13);
-            let zoneCount = 0;
-            last5.forEach(d => d.nums.forEach(n => { if(Math.floor((n-1)/13) === zone) zoneCount++; }));
-            if(zoneCount < 4) scores[i] += 40; // 補強冷區
-            // 4. 尾數加成
-            let tail = i % 10;
-            let tailCount = 0;
-            hist.slice(-10).forEach(d => d.nums.forEach(n => { if(n%10 === tail) tailCount++; }));
-            scores[i] += tailCount * 5;
+        // 2. 矩陣區間補償 (分析 P4 邏輯)
+        for(let z=0; z<3; z++) {
+            let start = z*13+1, end = (z+1)*13;
+            let count = 0;
+            hist.slice(-3).forEach(d => d.nums.forEach(n => { if(n>=start && n<=end) count++; }));
+            if(count <= 2) { // 若該大區近期出號極少
+                for(let i=start; i<=end; i++) scores[i] += 30;
+            }
         }
+
+        // 3. 尾數熱點維持
+        let tMap = Array(10).fill(0);
+        last10.forEach(d => d.nums.forEach(n => tMap[n%10]++));
+        for(let i=1; i<=39; i++) scores[i] += (tMap[i%10] * 5);
 
         return scores.map((s, i) => ({n: i, s})).slice(1)
-                     .sort((a,b) => b.s - a.s || a.n - b.n) // 確保數據一致性
+                     .sort((a,b) => b.s - a.s || a.n - b.n)
                      .slice(0, 5).map(x => x.n).sort((a,b) => a-b);
     }
 
@@ -118,24 +112,32 @@
     });
 
     function render() {
-        // P2 回測
         let btHtml = "", totalHits = 0;
         const btData = rawData.slice(-10).reverse();
         btData.forEach(row => {
             const idx = rawData.findIndex(r => r.date === row.date);
-            const pred = runMultiStrategy(rawData.slice(0, idx));
+            const pred = getMS2Logic(rawData.slice(0, idx));
             const hits = row.nums.filter(n => pred.includes(n));
             totalHits += hits.length;
-            btHtml += `<div class="bt-row"><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#8e8e93;font-size:11px;">📅 ${row.date}</span><span class="star-tag">${hits.length} ★</span></div>
-                <div style="display:flex;gap:4px;">${row.nums.map(n => `<div class="n-box ${pred.includes(n)?'hit':''}">${pad(n)}</div>`).join('')}</div></div>`;
+            
+            // P2 顯示邏輯：列出當期 5 碼，並標註哪些是預測碼、哪些命中
+            btHtml += `<div class="bt-row">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub)"><span>📅 ${row.date}</span><span style="background:var(--success);color:#000;padding:2px 6px;border-radius:4px;font-weight:900">${hits.length} ★</span></div>
+                <div class="num-group">
+                    ${row.nums.map(n => {
+                        let cls = "n-box";
+                        if(pred.includes(n)) cls += " is-pred hit";
+                        return `<div class="${cls}">${pad(n)}</div>`;
+                    }).join('')}
+                </div>
+                <div style="font-size:10px; color:var(--accent); margin-top:4px;">預測方案: ${pred.map(p => pad(p)).join(' ')}</div>
+            </div>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
 
-        // P3 預測
-        const nextPred = runMultiStrategy(rawData);
-        document.getElementById('nextPred').innerHTML = nextPred.map(num => `<div class="ball">${pad(num)}</div>`).join('');
+        const next = getMS2Logic(rawData);
+        document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball">${pad(n)}</div>`).join('');
 
-        // P4 矩陣
         let mHtml = `<table class="m-table"><thead><tr><th class="m-date">日</th>`;
         for(let i=1; i<=39; i++) mHtml += `<th class="m-head">${pad(i)}</th>`;
         mHtml += `</tr></thead><tbody>`;
@@ -145,11 +147,7 @@
             mHtml += `</tr>`;
         });
         document.getElementById('matrixCont').innerHTML = mHtml + `</tbody></table>`;
-
-        document.getElementById('logBox').innerHTML = "";
-        log(`MS1 多策略引擎已啟動`);
-        log(`一致性校驗：PASSED`);
-        log(`綜合期望值：${(totalHits/10).toFixed(1)}`);
+        log(`MS2 多維引擎運作中 | 期望值: ${(totalHits/10).toFixed(1)}`);
     }
 </script>
 </body>
