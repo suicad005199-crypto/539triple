@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>539 精準分析 MS27</title>
+    <title>539 精準分析 MS28</title>
     <style>
         :root { --bg: #000; --panel: #1c1c1e; --primary: #ffd60a; --border: #38383a; --text: #fff; --sub: #8e8e93; --hit: #ff375f; --accent: #0a84ff; --success: #32d74b; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -29,7 +29,7 @@
 <body>
 <div class="container">
     <div class="panel">
-        <div class="panel-header">P1: 數據注入 (MS27 簇群版)</div>
+        <div class="panel-header">P1: 數據注入 (MS28 網格版)</div>
         <input type="file" id="csvFile" accept=".csv" style="width: 100%;">
     </div>
     <div class="panel">
@@ -37,14 +37,14 @@
         <div id="btBody"></div>
     </div>
     <div class="panel">
-        <div class="panel-header" style="color:var(--accent)">P3: 簇群連動預測 (5 碼)</div>
+        <div class="panel-header" style="color:var(--accent)">P3: 空間最大化預測 (5 碼)</div>
         <div id="nextPred" class="ball-row"></div>
     </div>
     <div class="panel">
         <div class="panel-header">P4: 分布矩陣</div>
         <div class="matrix-scroll" id="matrixCont"></div>
     </div>
-    <div class="panel"><div id="logBox">MS27 已就位。正在優化影子碼覆蓋率...</div></div>
+    <div class="panel"><div id="logBox">MS28 已啟動。正在執行全域網格掃描...</div></div>
 </div>
 
 <script>
@@ -57,59 +57,36 @@
     const pad = (n) => n.toString().padStart(2, '0');
     const formatDate = (s) => { const p = s.split(/[-/]/); return p.length >= 3 ? `${p[1]}/${p[2]}` : s; };
 
-    function getMS27Prediction(hist, isSilent=true) {
+    function getMS28Prediction(hist, isSilent=true) {
         if(hist.length < 20) return [1,2,3,4,5];
-        const lastRow = hist[hist.length-1].nums;
-        let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0, gap: 0, types: [] }));
+        let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0, gap: 0 }));
 
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             stats[i].gap = gap;
             
-            if(lastRow.some(ln => Math.abs(ln - i) === 1)) { stats[i].score += 45; stats[i].types.push('鄰'); }
-            let f15 = hist.slice(-15).filter(d => d.nums.includes(i)).length;
-            if(f15 >= 2 && gap < 4) { stats[i].score += 40; stats[i].types.push('熱'); }
-            if(gap >= 5 && gap <= 13) { stats[i].score += 50; stats[i].types.push('跳'); }
-            
-            // 簇群權重：若周圍號碼也高分，額外加分
-            let surroundings = [i-1, i+1].filter(n => n>=1 && n<=39);
-            surroundings.forEach(sn => { if(lastRow.includes(sn)) stats[i].score += 15; });
+            // MS28 核心：平衡遺漏評分 (4-12期最優)
+            if (gap >= 4 && gap <= 12) stats[i].score += 60;
+            else if (gap < 4) stats[i].score += 30;
+            else stats[i].score += 10;
+
+            // 頻次補償：近 20 期出現次數越接近平均 (2.5次)，分越高
+            let f20 = hist.slice(-20).filter(d => d.nums.includes(i)).length;
+            stats[i].score += (5 - Math.abs(2.5 - f20)) * 5;
         }
 
-        let selected = [];
-        let sorted = stats.slice(1).sort((a,b) => b.score - a.score);
+        // 網格劃分：1-7, 8-15, 16-23, 24-31, 32-39
+        const zones = [[1,7], [8,15], [16,23], [24,31], [32,39]];
+        let selected = zones.map(z => {
+            return stats.slice(z[0], z[1] + 1).sort((a,b) => b.score - a.score)[0];
+        });
 
-        // 策略：選取前 2 個強核心，並帶入其最優影子碼 (連號或同尾)
-        for(let core of sorted) {
-            if(selected.length >= 4) break;
-            if(!selected.some(s => s.n === core.n)) {
-                selected.push(core);
-                // 尋找影子碼：鄰近或同尾
-                let shadow = stats.slice(1)
-                    .filter(s => s.n !== core.n && !selected.some(sel => sel.n === s.n))
-                    .filter(s => Math.abs(s.n - core.n) === 1 || s.n % 10 === core.n % 10)
-                    .sort((a,b) => b.score - a.score)[0];
-                if(shadow) selected.push(shadow);
-            }
-        }
-
-        // 補足第 5 碼 (強制區間分散)
-        for(let s of sorted) {
-            if(selected.length >= 5) break;
-            let zone = Math.floor((s.n-1)/10);
-            let zoneCount = selected.filter(sel => Math.floor((sel.n-1)/10) === zone).length;
-            if(zoneCount < 2 && !selected.some(sel => sel.n === s.n)) {
-                selected.push(s);
-            }
-        }
-
-        selected = selected.slice(0, 5).sort((a,b)=>a.n-b.n);
         if(!isSilent) {
-            log(`策略：簇群連動 | 已鎖定影子碼配對`, '#ffd60a');
-            selected.forEach(s => log(`${pad(s.n)} [${s.types.join('|')||'補'}] G:${s.gap} 分:${Math.round(s.score)}`));
+            log(`網格模式：全域空間疏散 | 禁用連動加成`, '#ffd60a');
+            selected.forEach(s => log(`${pad(s.n)} G:${s.gap} 分:${Math.round(s.score)}`));
         }
-        return selected.map(x => x.n);
+        return selected.map(x => x.n).sort((a,b)=>a-b);
     }
 
     document.getElementById('csvFile').addEventListener('change', e => {
@@ -120,26 +97,25 @@
                 return { date: c[0].trim(), nums: c.slice(1, 6).map(x => parseInt(x.trim())).filter(x => !isNaN(x)).sort((a,b)=>a-b) };
             }).filter(r => r.nums.length === 5);
             document.getElementById('logBox').innerHTML = "";
-            runMS27();
+            runMS28();
         };
         reader.readAsText(e.target.files[0]);
     });
 
-    function runMS27() {
-        let btHtml = "", totalH = 0, h0 = 0, h2p = 0, h3p = 0;
+    function runMS28() {
+        let btHtml = "", totalH = 0, h0 = 0, h2p = 0;
         const displayData = rawData.slice(-10).reverse();
         displayData.forEach(row => {
             const idx = rawData.indexOf(row);
-            const pred = getMS27Prediction(rawData.slice(0, idx), true);
+            const pred = getMS28Prediction(rawData.slice(0, idx), true);
             const hits = row.nums.filter(n => pred.includes(n));
             if(hits.length === 0) h0++;
             if(hits.length >= 2) h2p++;
-            if(hits.length >= 3) h3p++;
             totalH += hits.length;
             btHtml += `<div class="bt-row"><div class="bt-meta"><span>📅 ${formatDate(row.date)}</span> <span style="background:var(--success);color:#000;padding:2px 5px;border-radius:4px;font-weight:bold;">${hits.length} ★</span></div><div class="num-group"><span class="num-label">開獎</span>${row.nums.map(n => `<div class="n-box ${pred.includes(n)?'hit':''}">${pad(n)}</div>`).join('')}</div><div class="num-group"><span class="num-label">預測</span>${pred.map(n => `<div class="n-box" style="color:${row.nums.includes(n)?'var(--primary)':'#888'}">${pad(n)}</div>`).join('')}</div></div>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
-        const next = getMS27Prediction(rawData, false);
+        const next = getMS28Prediction(rawData, false);
         document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball">${pad(n)}</div>`).join('');
         
         let mHtml = `<table class="m-table"><thead><tr><th class="m-date">日</th>`;
@@ -151,7 +127,7 @@
             mHtml += `</tr>`;
         });
         document.getElementById('matrixCont').innerHTML = mHtml + `</tbody></table>`;
-        log(`性能報告: 平均 ${(totalH/10).toFixed(1)} | 三星率 ${h3p*10}% | 雙星率 ${h2p*10}% | 掛零 ${h0}期`, '#0a84ff');
+        log(`性能分析: 平均 ${(totalH/10).toFixed(1)} | 雙星率 ${h2p*10}% | 掛零 ${h0}期`, '#0a84ff');
     }
 </script>
 </body>
