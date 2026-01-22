@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天樂 Oracle V.35-VRB</title>
+    <title>天天樂 Oracle V.36-RG</title>
     <style>
         :root { --bg: #0d1117; --panel: #161b22; --primary: #58a6ff; --border: #30363d; --text: #c9d1d9; --sub: #8b949e; --hit: #f85149; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -25,11 +25,11 @@
 </head>
 <body>
 <div class="container">
-    <div class="panel"><div class="panel-header">P1: 均衡注入 (V.35.0 VRB)</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P1: 網格共振注入 (V.36.0 RG)</div><input type="file" id="csvFile" accept=".csv"></div>
     <div class="panel"><div class="panel-header">P2: 實時預測與命中分布</div><div id="btBody"></div></div>
-    <div class="panel"><div class="panel-header">P3: 核心預測 (8 碼均衡)</div><div id="nextPred"></div></div>
+    <div class="panel"><div class="panel-header">P3: 核心預測 (網格佈防)</div><div id="nextPred"></div></div>
     <div class="panel"><div class="panel-header">P4: 分布矩陣</div><div class="matrix-scroll" id="matrixCont"></div></div>
-    <div class="panel"><div id="logBox">V.35 啟動：執行穩定性錨點策略，目標期望值 2.0...</div></div>
+    <div class="panel"><div id="logBox">V.36 啟動：執行網格覆蓋與對位補償，解決極端掛0...</div></div>
 </div>
 
 <script>
@@ -37,33 +37,41 @@
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     const pad = (n) => n.toString().padStart(2, '0');
 
-    function getVRBPrediction(hist) {
-        if(hist.length < 30) return [1,2,3,4,5,6,7,8];
+    function getRGPrediction(hist) {
+        if(hist.length < 30) return [1,5,10,15,20,25,30,35];
         const lastRow = hist[hist.length-1].nums;
         let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0 }));
 
-        // 1. 虛空基礎 (V26)
+        // 1. V.26 虛空權重
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            if(gap >= 15 && gap <= 25) stats[i].score += 550;
-            else stats[i].score += (gap * 12);
+            if(gap >= 15 && gap <= 28) stats[i].score += 500;
+            stats[i].score += (gap * 10);
         }
 
-        // 2. 共振與熱號錨點 (V27 + 熱補償)
-        let hotMap = Array(40).fill(0);
-        hist.slice(-5).forEach(d => d.nums.forEach(n => hotMap[n]++));
-        
+        // 2. V.27 共振與對位補償
         lastRow.forEach(ln => {
-            if(ln > 1) stats[ln-1].score += 130;
-            if(ln < 39) stats[ln+1].score += 130;
-            for(let i=1; i<=39; i++) {
-                if(i%10 === ln%10) stats[i].score += 90;
-                if(hotMap[i] >= 2) stats[i].score += 150; // 熱號加成，增加命中保底
-            }
+            if(ln > 1) stats[ln-1].score += 100;
+            if(ln < 39) stats[ln+1].score += 100;
+            let counter = 40 - ln; // 對位碼
+            if(counter > 0 && counter < 40) stats[counter].score += 150;
         });
 
-        return stats.sort((a,b) => b.score - a.score).slice(0, 8).map(x => x.n).sort((a,b) => a-b);
+        let sorted = stats.sort((a,b) => b.score - a.score);
+        let final = [];
+        let zones = [0,0,0,0]; // 區間計數
+
+        for(let i=0; i<sorted.length && final.length < 8; i++) {
+            let n = sorted[i].n;
+            if(n === 0) continue;
+            let z = Math.floor((n-1)/10);
+            if(zones[z] < 3) { // 每個區間最多3碼，強制發散覆蓋
+                final.push(n);
+                zones[z]++;
+            }
+        }
+        return final.sort((a,b) => a-b);
     }
 
     document.getElementById('csvFile').addEventListener('change', e => {
@@ -80,15 +88,15 @@
 
     function runFullSim() {
         document.getElementById('btBody').innerHTML = "";
-        let star = { 0:0, 1:0, 2:0, 3:0, 4:0 };
+        let star = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0 };
         let totalHits = 0;
         const testData = rawData.slice(-10).reverse();
 
         testData.forEach(row => {
             const hist = rawData.slice(0, rawData.indexOf(row));
-            const pred = getVRBPrediction(hist);
+            const pred = getRGPrediction(hist);
             const hits = row.nums.filter(n => pred.includes(n));
-            star[Math.min(hits.length, 4)]++;
+            star[Math.min(hits.length, 5)]++;
             totalHits += hits.length;
 
             document.getElementById('btBody').innerHTML += `
@@ -99,7 +107,7 @@
                 </div>`;
         });
 
-        const next = getVRBPrediction(rawData);
+        const next = getRGPrediction(rawData);
         document.getElementById('nextPred').innerHTML = `<div class="ball-row">${next.slice(0,4).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div><div class="ball-row">${next.slice(4,8).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div>`;
 
         let mHtml = `<table class="m-table"><thead><tr><th style="position:sticky;left:0;background:#161b22;">日期</th>`;
@@ -112,9 +120,8 @@
         });
         document.getElementById('matrixCont').innerHTML = mHtml + `</tbody></table>`;
 
-        log(`期望值：${(totalHits/10).toFixed(2)} 碼 / 期`);
-        log(`回測：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}% | 3★:${star[3]*10}%`);
-        log(`策略：保留三星爆發權重，增加近期熱號錨點。`);
+        log(`當前期望值：${(totalHits/10).toFixed(2)} 碼 / 期`);
+        log(`分布：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}% | 4★:${star[4]*10}%`);
     }
 </script>
 </body>
