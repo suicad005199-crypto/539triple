@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Oracle V.53.10 Cover-Max</title>
+    <title>Oracle V.53.11 Zone-Entropy</title>
     <style>
         :root { --bg: #000; --panel: #141414; --primary: #ff3b30; --border: #2c2c2e; --text: #fff; --sub: #8e8e93; --hit: #ffd60a; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -24,16 +24,17 @@
 </head>
 <body>
 <div class="container">
-    <div class="panel"><div class="panel-header">P1: 數據注入 (V.53.10)</div><input type="file" id="csvFile" accept=".csv"></div>
-    <div class="panel"><div class="panel-header">P2: 深度回測看板 (近 10 期)</div><div id="btBody"></div></div>
-    <div class="panel"><div class="panel-header">P3: 下期預測 (8 碼最大覆蓋)</div><div id="nextPred" class="ball-row"></div></div>
-    <div class="panel"><div class="panel-header">CONSOLE: 統計分析</div><div id="logBox">等待 CSV 檔案...</div></div>
+    <div class="panel"><div class="panel-header">P1: 數據注入 (V.53.11)</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P2: 深度回測 (近 10 期明細)</div><div id="btBody"></div></div>
+    <div class="panel"><div class="panel-header">P3: 下期預測 (8 碼區段平衡版)</div><div id="nextPred" class="ball-row"></div></div>
+    <div class="panel"><div class="panel-header">CONSOLE: 策略統計分析</div><div id="logBox">等待 CSV 匯入...</div></div>
 </div>
 
 <script>
     let rawData = [];
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     const pad = (n) => n.toString().padStart(2, '0');
+    const formatDate = (s) => { const p = s.split(/[-/]/); return p.length >= 3 ? `${p[1]}/${p[2]}` : s; };
 
     function getPrediction(hist) {
         if(hist.length < 30) return [1,2,11,12,21,22,31,32];
@@ -43,35 +44,31 @@
         for(let i=1; i<=39; i++) {
             let gap = 0; for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
             scores[i].gap = gap;
-            if(gap >= 15 && gap <= 30) scores[i].s += 780;
-            if(gap >= 4 && gap <= 8) scores[i].s += 180; // 溫碼梯度
+            if(gap >= 18 && gap <= 32) scores[i].s += 815; 
+            if(gap >= 4 && gap <= 8) scores[i].s += 130; 
             let hot = 0; hist.slice(-10).forEach(d => { if(d.nums.includes(i)) hot++; });
-            scores[i].s += hot * 230; 
+            scores[i].s += hot * 210; 
             lastRow.forEach(ln => { 
-                if(Math.abs(ln - i) === 1) scores[i].s += 310; 
-                if(ln % 10 === i % 10) scores[i].s += 330; 
+                if(Math.abs(ln - i) === 1) scores[i].s += 315; 
+                if(ln % 10 === i % 10) scores[i].s += 335; 
             });
         }
 
         let final = new Set();
-        let sorted = [...scores].sort((a,b)=>b.s - a.s);
+        const getZone = (n) => n <= 13 ? 0 : (n <= 26 ? 1 : 2);
+        let zoneCounts = [0, 0, 0];
 
-        // 核心選碼邏輯：強化空間分散
+        // 核心選碼增加區段限制
+        let sorted = [...scores].sort((a,b) => b.s - a.s);
         for(let x of sorted) {
             if(x.n === 0) continue;
-            // 空間間距檢查：與已選碼至少距離 4
-            if(![...final].some(fn => Math.abs(fn - x.n) < 4)) {
+            let z = getZone(x.n);
+            // 每個區段上限 3 碼，確保均勻
+            if(zoneCounts[z] < 3 && ![...final].some(fn => Math.abs(fn-x.n) < 3)) {
                 final.add(x.n);
-                // 嘗試加入一個同尾伴侶
-                let tail = sorted.find(h => h.n !== x.n && h.n%10 === x.n%10 && !final.has(h.n));
-                if(tail && final.size < 8) final.add(tail.n);
+                zoneCounts[z]++;
             }
             if(final.size >= 8) break;
-        }
-
-        // 補位
-        for(let x of sorted) {
-            if(final.size < 8 && x.n !== 0 && !final.has(x.n)) final.add(x.n);
         }
 
         return Array.from(final).slice(0, 8).sort((a,b) => a-b);
@@ -104,16 +101,16 @@
             const pred = getPrediction(hist);
             const hits = row.nums.filter(n => pred.includes(n));
             btHtml += `<div class="bt-row">
-                <div class="bt-meta"><span>📅 ${row.date}</span> <span class="star-tag">${hits.length} ★</span></div>
+                <div class="bt-meta"><span>📅 ${formatDate(row.date)}</span> <span class="star-tag">${hits.length} ★</span></div>
                 <div class="num-group"><span class="num-label">開獎</span>${row.nums.map(n => `<div class="n-box ${pred.includes(n)?'hit':''}">${pad(n)}</div>`).join('')}</div>
                 <div class="num-group"><span class="num-label">預測</span>${pred.map(n => `<div class="n-box" style="color:${row.nums.includes(n)?'var(--hit)':'#666'}">${pad(n)}</div>`).join('')}</div>
             </div>`;
         });
         document.getElementById('btBody').innerHTML = btHtml;
         document.getElementById('nextPred').innerHTML = getPrediction(rawData).map(n => `<div class="ball">${pad(n)}</div>`).join('');
-        log(`[V.53.10 Cover-Max] 掃描完成`);
-        log(`2★以上占比: ${((starCount[2]+starCount[3]+starCount[4])/totalPeriods*100).toFixed(1)}%`);
-        log(`分佈: 1★(${(starCount[1]/totalPeriods*100).toFixed(0)}%) | 2★(${(starCount[2]/totalPeriods*100).toFixed(0)}%) | 3★+(${(starCount[3]/totalPeriods*100).toFixed(0)}%)`);
+        log(`[V.53.11 區段平衡版啟動]`);
+        log(`期望值：${(totalHits / totalPeriods).toFixed(2)} 碼/期`);
+        log(`2★以上累計: ${((starCount[2]+starCount[3]+starCount[4])/totalPeriods*100).toFixed(1)}%`);
     }
 </script>
 </body>
