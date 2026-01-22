@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天樂 Oracle V.27-VRM</title>
+    <title>天天樂 Oracle V.28-PS</title>
     <style>
         :root { --bg: #02040a; --panel: #0d1117; --primary: #58a6ff; --border: #30363d; --text: #c9d1d9; --sub: #8b949e; --hit: #f85149; --success: #238636; }
         body { font-family: 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
@@ -28,11 +28,11 @@
 </head>
 <body>
 <div class="container">
-    <div class="panel"><div class="panel-header">P1: 虛空共振注入 (V.27.0 VRM)</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P1: 支點強攻注入 (V.28.0 PS)</div><input type="file" id="csvFile" accept=".csv"></div>
     <div class="panel"><div class="panel-header">P2: 實時預測與命中分布</div><div id="btBody"></div></div>
-    <div class="panel"><div class="panel-header">P3: 核心預測 (4+4 靠左)</div><div id="nextPred"></div></div>
+    <div class="panel"><div class="panel-header">P3: 核心預測 (4+4 支點鎖定)</div><div id="nextPred"></div></div>
     <div class="panel"><div class="panel-header">P4: 歷史數據分布矩陣</div><div class="matrix-scroll" id="matrixCont"></div></div>
-    <div class="panel"><div id="logBox">系統已就緒。正在恢復 P4 矩陣並優化期望值計算...</div></div>
+    <div class="panel"><div id="logBox">V.28 支點強攻啟動。目標：轉化 60% 二星為三星...</div></div>
 </div>
 
 <script>
@@ -40,32 +40,34 @@
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     const pad = (n) => n.toString().padStart(2, '0');
 
-    function getVRMPrediction(hist) {
-        if(hist.length < 30) return [1,5,9,13,17,21,25,29];
+    function getPSPrediction(hist) {
+        if(hist.length < 40) return [1,5,9,13,17,21,25,29];
         let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0 }));
         const lastRow = hist[hist.length-1].nums;
 
-        // 核心邏輯：復刻 V.23 遺漏權重
+        // 1. 優化虛空窗口 (18-24期)
         for(let i=1; i<=39; i++) {
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            if(gap >= 15 && gap <= 28) stats[i].score += (gap * 30);
-            else stats[i].score += (gap * 4);
+            if(gap >= 18 && gap <= 24) stats[i].score += 450; 
+            else stats[i].score += (gap * 5);
         }
 
-        // 二星轉三星共振強化
-        hist.slice(-60).forEach(d => {
-            let matches = d.nums.filter(n => lastRow.includes(n)).length;
-            if(matches >= 2) { 
-                d.nums.forEach(n => { if(!lastRow.includes(n)) stats[n].score += 100; });
+        // 2. 支點共振分析：找出歷史最強伴隨碼
+        let pairWeights = Array(40).fill(0);
+        hist.slice(-80).forEach(d => {
+            let hitCount = d.nums.filter(n => lastRow.includes(n)).length;
+            if(hitCount >= 1) { // 只要中一顆就開始計算支點機率
+                d.nums.forEach(n => { if(!lastRow.includes(n)) pairWeights[n] += 60; });
             }
         });
+        for(let i=1; i<=39; i++) stats[i].score += pairWeights[i];
 
-        // 鄰位與熱尾補償
-        lastRow.forEach(ln => {
-            if(ln > 1) stats[ln-1].score += 50;
-            if(ln < 39) stats[ln+1].score += 50;
-        });
+        // 3. 尾數極端壓縮 (僅取最強2尾)
+        let tailMap = Array(10).fill(0);
+        hist.slice(-25).forEach(d => d.nums.forEach(n => tailMap[n%10]++));
+        let topTails = tailMap.map((v, i) => ({t:i, v})).sort((a,b)=>b.v-a.v).slice(0, 2).map(x=>x.t);
+        for(let i=1; i<=39; i++) { if(topTails.includes(i%10)) stats[i].score += 120; }
 
         return stats.sort((a,b) => b.score - a.score).slice(0, 8).map(x => x.n).sort((a,b) => a-b);
     }
@@ -90,7 +92,7 @@
 
         testData.forEach(row => {
             const hist = rawData.slice(0, rawData.indexOf(row));
-            const pred = getVRMPrediction(hist);
+            const pred = getPSPrediction(hist);
             const hits = row.nums.filter(n => pred.includes(n));
             star[Math.min(hits.length, 4)]++;
             totalHits += hits.length;
@@ -103,13 +105,9 @@
                 </div>`;
         });
 
-        // P3 顯示
-        const next = getVRMPrediction(rawData);
-        document.getElementById('nextPred').innerHTML = `
-            <div class="ball-row">${next.slice(0,4).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div>
-            <div class="ball-row">${next.slice(4,8).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div>`;
+        const next = getPSPrediction(rawData);
+        document.getElementById('nextPred').innerHTML = `<div class="ball-row">${next.slice(0,4).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div><div class="ball-row">${next.slice(4,8).map(n=>`<div class="ball">${pad(n)}</div>`).join('')}</div>`;
 
-        // P4 矩陣恢復
         let mHtml = `<table class="m-table"><thead><tr><th style="position:sticky;left:0;background:#161b22;">日期</th>`;
         for(let i=1; i<=39; i++) mHtml += `<th class="m-head">${pad(i)}</th>`;
         mHtml += `</tr></thead><tbody>`;
@@ -120,11 +118,9 @@
         });
         document.getElementById('matrixCont').innerHTML = mHtml + `</tbody></table>`;
 
-        // Log 期望值
-        let ev = (totalHits / 10).toFixed(2);
-        log(`全數據模擬完成。`);
-        log(`命中率：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}% | 3★:${star[3]*10}%`);
-        log(`[期望值評估]：${ev} 碼 / 期`);
+        log(`模擬完成。期望值：${(totalHits/10).toFixed(2)} 碼 / 期`);
+        log(`命中：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}% | 3★:${star[3]*10}%`);
+        log(`策略：支點鎖定 + 尾數極端壓縮模式。`);
     }
 </script>
 </body>
