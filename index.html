@@ -3,25 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天樂 Oracle V.44-VD</title>
+    <title>天天樂 Oracle V.45-PQ</title>
     <style>
-        :root { --bg: #010409; --panel: #0d1117; --primary: #58a6ff; --border: #30363d; --text: #c9d1d9; }
+        :root { --bg: #010409; --panel: #0d1117; --primary: #58a6ff; --border: #30363d; --text: #c9d1d9; --sub: #8b949e; }
         body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; font-size: 13px; }
         .container { display: flex; flex-direction: column; gap: 10px; max-width: 600px; margin: auto; }
         .panel { background: var(--panel); border-radius: 10px; padding: 12px; border: 1px solid var(--border); }
-        .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 8px; border-left: 3px solid var(--primary); padding-left: 8px; }
+        .panel-header { color: var(--primary); font-weight: bold; margin-bottom: 8px; border-left: 3px solid var(--primary); padding-left: 8px; font-size: 14px; }
         .bt-row { border-bottom: 1px solid var(--border); padding: 8px 0; }
         .n-box { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: #161b22; font-size: 11px; font-weight: bold; border: 1px solid #30363d; margin-right: 4px; }
+        .n-box.hit { background: var(--primary); color: #fff; border: none; box-shadow: 0 0 8px var(--primary); }
         .ball { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; background: #010409; border-radius: 50%; font-weight: bold; border: 2px solid var(--primary); color: var(--primary); font-size: 17px; margin-right: 8px; }
         #logBox { background: #000; color: #58a6ff; padding: 10px; height: 110px; overflow-y: auto; font-family: monospace; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="panel"><div class="panel-header">P1: 虛空雙子注入 (V.44.0 VD)</div><input type="file" id="csvFile" accept=".csv"></div>
-    <div class="panel"><div class="panel-header">P2: 1星轉2星回測</div><div id="btBody"></div></div>
-    <div class="panel"><div class="panel-header">P3: 核心預測 (遺漏共振)</div><div id="nextPred" style="display:flex; flex-wrap:wrap; gap:10px;"></div></div>
-    <div class="panel"><div id="logBox">V.44 啟動：執行遺漏同層鎖定邏輯，強攻同步回補 2 星...</div></div>
+    <div class="panel"><div class="panel-header">P1: 四強原力融合 (V.45.0 PQ)</div><input type="file" id="csvFile" accept=".csv"></div>
+    <div class="panel"><div class="panel-header">P2: 優異版本融合回測</div><div id="btBody"></div></div>
+    <div class="panel"><div class="panel-header">P3: 核心預測 (最強基因疊加)</div><div id="nextPred" style="display:flex; flex-wrap:wrap; gap:10px;"></div></div>
+    <div class="panel"><div id="logBox">V.45 啟動：融合 V26, 27, 35, 39 原始基因...</div></div>
 </div>
 
 <script>
@@ -29,35 +30,31 @@
     const log = (m) => { const b = document.getElementById('logBox'); b.innerHTML += `> ${m}<br>`; b.scrollTop = b.scrollHeight; };
     const pad = (n) => n.toString().padStart(2, '0');
 
-    function getVDPrediction(hist) {
-        if(hist.length < 35) return [1,2,3,4,5,6,7,8];
-        
-        let pool = [];
+    function getPQPrediction(hist) {
+        if(hist.length < 35) return [1,2,11,12,21,22,31,32];
+        const lastRow = hist[hist.length-1].nums;
+        let stats = Array(40).fill(0).map((_, i) => ({ n: i, score: 0 }));
+
         for(let i=1; i<=39; i++) {
+            // V.26 虛空基底
             let gap = 0;
             for(let k=hist.length-1; k>=0; k--) { if(!hist[k].nums.includes(i)) gap++; else break; }
-            pool.push({ n: i, gap: gap });
+            if(gap >= 18 && gap <= 30) stats[i].score += 550;
+            stats[i].score += (gap * 10);
+
+            // V.27/39 矩陣與同尾
+            lastRow.forEach(ln => {
+                if(Math.abs(ln - i) === 1) stats[i].score += 180; // 鄰號
+                if(ln % 10 === i % 10) stats[i].score += 120;   // 同尾
+            });
         }
 
-        // 剔除近3期熱號
-        let hotOnes = new Set();
-        hist.slice(-3).forEach(d => d.nums.forEach(n => hotOnes.add(n)));
-        pool = pool.filter(x => !hotOnes.has(x.n));
+        // V.35 熱點保底
+        let hotCounts = Array(40).fill(0);
+        hist.slice(-5).forEach(d => d.nums.forEach(n => hotCounts[n]++));
+        for(let i=1; i<=39; i++) if(hotCounts[i] >= 2) stats[i].score += 200;
 
-        // 按遺漏排序
-        pool.sort((a,b) => b.gap - a.gap);
-
-        let final = [];
-        // 策略：選取遺漏期數最接近的對號 (Doublets)
-        // 取前 16 名來做配對，增加聚攏度
-        let topPool = pool.slice(0, 16);
-        
-        // 這裡強制進行同層配對：Gap 最高的兩個一組，次高的兩個一組...
-        for(let i=0; i<8; i++) {
-            final.push(topPool[i].n);
-        }
-
-        return final.sort((a,b) => a-b);
+        return stats.sort((a,b) => b.score - a.score).slice(0, 8).map(x => x.n).sort((a,b) => a-b);
     }
 
     document.getElementById('csvFile').addEventListener('change', e => {
@@ -80,7 +77,7 @@
 
         testData.forEach(row => {
             const hist = rawData.slice(0, rawData.indexOf(row));
-            const pred = getVDPrediction(hist);
+            const pred = getPQPrediction(hist);
             const hits = row.nums.filter(n => pred.includes(n));
             star[Math.min(hits.length, 4)]++;
             totalHits += hits.length;
@@ -92,10 +89,10 @@
                 </div>`;
         });
 
-        const next = getVDPrediction(rawData);
+        const next = getPQPrediction(rawData);
         document.getElementById('nextPred').innerHTML = next.map(n => `<div class="ball">${pad(n)}</div>`).join('');
-        log(`期望值：${(totalHits/10).toFixed(2)} | 目標：突破 1.5 並聚攏 2★`);
-        log(`分布：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}%`);
+        log(`期望值：${(totalHits/10).toFixed(2)} | 回歸四強核心邏輯`);
+        log(`分布：0★:${star[0]*10}% | 1★:${star[1]*10}% | 2★:${star[2]*10}% | 3★+:${(star[3]+star[4])*10}%`);
     }
 </script>
 </body>
